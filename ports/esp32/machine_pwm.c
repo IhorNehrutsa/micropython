@@ -116,7 +116,7 @@ STATIC int set_freq(int newval, ledc_timer_config_t *timer) {
     return 1;
 }
 
-STATIC int found_timer(int freq) {
+STATIC int found_timer(int freq, bool same_freq_only) {
     int free_timer_found = -1;
     int timer;
     // Find a free PWM Timer using the same freq
@@ -125,7 +125,7 @@ STATIC int found_timer(int freq) {
             // A timer already use the same freq. Use it now.
             return timer;
         }
-        if ((free_timer_found == -1) && (timers[timer].freq_hz == -1)) {
+        if (!same_freq_only && (free_timer_found == -1) && (timers[timer].freq_hz == -1)) {
             free_timer_found = timer;
             // Continue to check if a channel with the same freq is in used.
         }
@@ -134,25 +134,18 @@ STATIC int found_timer(int freq) {
     return free_timer_found;
 }
 
-// If the timer is no longer used, clean it
-STATIC void cleanup_timer(int prev_channel, int timer) {
+// return if the timer is in use in addition to curr_channel
+STATIC bool is_timer_in_use(int curr_channel, int timer) {
     bool used = false;
     int i;
     for (i = 0; i < LEDC_CHANNEL_MAX; ++i) {
-        if (i != prev_channel && chan_timer[i] == timer) {
+        if (i != curr_channel && chan_timer[i] == timer) {
             used = true;
             break;
         }
     }
 
-    // If timer is not used, clean it
-    if (!used) {
-        ledc_timer_pause(PWMODE, timer);
-
-        // Flag it unused
-        timers[timer].freq_hz = -1;
-        chan_timer[prev_channel] = -1;
-    }
+    return used;
 }
 
 /******************************************************************************/
@@ -204,13 +197,13 @@ STATIC void esp32_pwm_init_helper(esp32_pwm_obj_t *self,
     int timer;
     int freq = args[ARG_freq].u_int;
 
-    //Check if freq wasn't passed as an argument
+    // Check if freq wasn't passed as an argument
     if (freq == -1) {
         // Check if already set, otherwise use the defaut freq
         freq = chan_timer[self->channel] != -1 ? timers[chan_timer[self->channel]].freq_hz : PWFREQ;
     }
 
-    timer = found_timer(freq);
+    timer = found_timer(freq, false);
 
     if (timer == -1) {
         mp_raise_ValueError(MP_ERROR_TEXT("out of PWM timers"));
@@ -289,7 +282,12 @@ STATIC mp_obj_t esp32_pwm_deinit(mp_obj_t self_in) {
     // Valid channel?
     if ((chan >= 0) && (chan < LEDC_CHANNEL_MAX)) {
         // Clean up timer if necessary
-        cleanup_timer(chan, chan_timer[self->channel]);
+        if (!is_timer_in_use(chan, chan_timer[chan])) {
+            ledc_timer_rst(PWMODE, chan_timer[chan]);
+            // Flag it unused
+            timers[chan_timer[chan]].freq_hz = -1;
+            chan_timer[chan] = -1;
+        }
 
         // Mark it unused, and tell the hardware to stop routing
         chan_gpio[chan] = -1;
@@ -311,24 +309,52 @@ STATIC mp_obj_t esp32_pwm_freq(size_t n_args, const mp_obj_t *args) {
 
     // set
     int tval = mp_obj_get_int(args[1]);
-    cleanup_timer(self->channel, chan_timer[self->channel]);
 
-    // Check if a timer already use the new freq, or grab a new one
-    int new_timer = found_timer(tval);
-
-    if (new_timer == -1) {
-        mp_raise_ValueError(MP_ERROR_TEXT("out of PWM timers"));
+    if (tval == timers[chan_timer[self->channel]].freq_hz) {
+        return mp_const_none;
     }
 
-    chan_timer[self->channel] = new_timer;
+    int current_timer = chan_timer[self->channel];
+    int new_timer = -1;
+    bool current_in_use = is_timer_in_use(self->channel, current_timer);
 
-    if (ledc_bind_channel_timer(PWMODE, self->channel, new_timer) != ESP_OK) {
-        mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("Failed to bind timer to channel"));
+    // Check if an already running with the same freq is running
+    new_timer = found_timer(tval, true);
+
+    // If no existing timer was found, and the current one is in use, then find a new one
+    if (new_timer == -1 && current_in_use) {
+        // Have to found a new timer
+        new_timer = found_timer(tval, false);
+
+        if (new_timer == -1) {
+            mp_raise_ValueError(MP_ERROR_TEXT("out of PWM timers"));
+        }
     }
 
-    if (!set_freq(tval, &timers[new_timer])) {
+    if (new_timer != -1 && new_timer != current_timer) {
+        // Bind the channel to the new timer
+        chan_timer[self->channel] = new_timer;
+
+        if (ledc_bind_channel_timer(PWMODE, self->channel, new_timer) != ESP_OK) {
+            mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("Failed to bind timer to channel"));
+        }
+
+        if (!current_in_use) {
+            // Free the old timer
+            ledc_timer_rst(PWMODE, current_timer);
+
+            // Flag it unused
+            timers[current_timer].freq_hz = -1;
+        }
+
+        current_timer = new_timer;
+    }
+
+    // Set the freq
+    if (!set_freq(tval, &timers[current_timer])) {
         mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("bad frequency %d"), tval);
     }
+
     return mp_const_none;
 }
 
