@@ -19,6 +19,8 @@ _MODE_QSTR = "qstr"
 # Extract MP_COMPRESSED_ROM_TEXT("") macros.  (Which come from MP_ERROR_TEXT)
 _MODE_COMPRESS = "compress"
 
+# File types which will be scanned.
+_FILE_TYPES = ['.c', '.cc', '.cpp', '.cxx']
 
 def write_out(fname, output):
     if output:
@@ -44,7 +46,7 @@ def process_file(f):
             m = re_line.match(line)
             assert m is not None
             fname = m.group(1)
-            if not fname.endswith(".c"):
+            if os.path.splitext(fname)[1].lower() not in _FILE_TYPES:
                 continue
             if fname != last_fname:
                 write_out(last_fname, output)
@@ -58,7 +60,8 @@ def process_file(f):
             elif args.mode == _MODE_COMPRESS:
                 output.append(match)
 
-    write_out(last_fname, output)
+    if last_fname:
+        write_out(last_fname, output)
     return ""
 
 

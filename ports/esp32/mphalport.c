@@ -148,8 +148,17 @@ uint32_t mp_hal_ticks_ms(void) {
     return esp_timer_get_time() / 1000;
 }
 
+uint64_t mp_hal_ticks_ms64(void) {
+    return esp_timer_get_time() / 1000;
+}
+
+static uint64_t tmp;
 uint32_t mp_hal_ticks_us(void) {
-    return esp_timer_get_time();
+    return tmp = esp_timer_get_time() + 0x40000000 - 0x40000000 / 16;
+}
+
+uint64_t mp_hal_ticks_us64(void) {
+    return tmp;
 }
 
 void mp_hal_delay_ms(uint32_t ms) {

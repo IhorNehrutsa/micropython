@@ -69,10 +69,21 @@ STATIC mp_obj_t time_ticks_ms(void) {
 }
 MP_DEFINE_CONST_FUN_OBJ_0(mp_utime_ticks_ms_obj, time_ticks_ms);
 
+#define MICROPY_PY_UTIME_TICKS_PERIOD64 0x4000000000000000
+STATIC mp_obj_t time_ticks_ms64(void) {
+    return mp_obj_new_int_from_ull(mp_hal_ticks_ms64() & (MICROPY_PY_UTIME_TICKS_PERIOD64 - 1)); //  & (MICROPY_PY_UTIME_TICKS_PERIOD64 - 1)
+}
+MP_DEFINE_CONST_FUN_OBJ_0(mp_utime_ticks_ms64_obj, time_ticks_ms64);
+
 STATIC mp_obj_t time_ticks_us(void) {
     return MP_OBJ_NEW_SMALL_INT(mp_hal_ticks_us() & (MICROPY_PY_UTIME_TICKS_PERIOD - 1));
 }
 MP_DEFINE_CONST_FUN_OBJ_0(mp_utime_ticks_us_obj, time_ticks_us);
+
+STATIC mp_obj_t time_ticks_us64(void) {
+    return mp_obj_new_int_from_ull(mp_hal_ticks_us64() & (MICROPY_PY_UTIME_TICKS_PERIOD64 - 1)); //  & (MICROPY_PY_UTIME_TICKS_PERIOD64 - 1)
+}
+MP_DEFINE_CONST_FUN_OBJ_0(mp_utime_ticks_us64_obj, time_ticks_us64);
 
 STATIC mp_obj_t time_ticks_cpu(void) {
     return MP_OBJ_NEW_SMALL_INT(mp_hal_ticks_cpu() & (MICROPY_PY_UTIME_TICKS_PERIOD - 1));
@@ -91,6 +102,18 @@ STATIC mp_obj_t time_ticks_diff(mp_obj_t end_in, mp_obj_t start_in) {
 }
 MP_DEFINE_CONST_FUN_OBJ_2(mp_utime_ticks_diff_obj, time_ticks_diff);
 
+STATIC mp_obj_t time_ticks_diff64(mp_obj_t end_in, mp_obj_t start_in) {
+    // we assume that the arguments come from ticks_xx so are small ints
+    uint64_t start = mp_obj_get_int(start_in);
+    uint64_t end = mp_obj_get_int(end_in);
+    // Optimized formula avoiding if conditions. We adjust difference "forward",
+    // wrap it around and adjust back.
+    int64_t diff = ((end - start + MICROPY_PY_UTIME_TICKS_PERIOD64 / 2) & (MICROPY_PY_UTIME_TICKS_PERIOD64 - 1)) // end - start; //
+        - MICROPY_PY_UTIME_TICKS_PERIOD64 / 2;
+    return mp_obj_new_int_from_ll(diff);
+}
+MP_DEFINE_CONST_FUN_OBJ_2(mp_utime_ticks_diff64_obj, time_ticks_diff64);
+
 STATIC mp_obj_t time_ticks_add(mp_obj_t ticks_in, mp_obj_t delta_in) {
     // we assume that first argument come from ticks_xx so is small int
     mp_uint_t ticks = MP_OBJ_SMALL_INT_VALUE(ticks_in);
@@ -98,5 +121,13 @@ STATIC mp_obj_t time_ticks_add(mp_obj_t ticks_in, mp_obj_t delta_in) {
     return MP_OBJ_NEW_SMALL_INT((ticks + delta) & (MICROPY_PY_UTIME_TICKS_PERIOD - 1));
 }
 MP_DEFINE_CONST_FUN_OBJ_2(mp_utime_ticks_add_obj, time_ticks_add);
+
+STATIC mp_obj_t time_ticks_add64(mp_obj_t ticks_in, mp_obj_t delta_in) {
+    // we assume that first argument come from ticks_xx so is small int
+    uint64_t ticks = mp_obj_get_int(ticks_in);
+    uint64_t delta = mp_obj_get_int(delta_in);
+    return mp_obj_new_int_from_ull((ticks + delta) & (MICROPY_PY_UTIME_TICKS_PERIOD64 - 1)); //  & (MICROPY_PY_UTIME_TICKS_PERIOD64 - 1)
+}
+MP_DEFINE_CONST_FUN_OBJ_2(mp_utime_ticks_add64_obj, time_ticks_add64);
 
 #endif // MICROPY_PY_UTIME_MP_HAL

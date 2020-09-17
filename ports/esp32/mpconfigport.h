@@ -282,3 +282,28 @@ typedef long mp_off_t;
 #ifndef MICROPY_HW_ENABLE_MDNS_RESPONDER
 #define MICROPY_HW_ENABLE_MDNS_RESPONDER    (1)
 #endif
+
+//----------------------------------------------
+#ifndef MODULE_MAHONY_ENABLED
+#define MODULE_MAHONY_ENABLED (1)
+#endif
+
+#ifndef MODULE_MADGWICK_ENABLED
+#define MODULE_MADGWICK_ENABLED (1)
+#endif
+
+#ifndef MODULE_INVSQRT_ENABLED
+#define MODULE_INVSQRT_ENABLED (1)
+#endif
+
+#ifndef MODULE_TEMPERATURE_CONVERSION_ENABLED
+#define MODULE_TEMPERATURE_CONVERSION_ENABLED (1)
+#endif
+
+#ifndef MODULE_EXAMPLE_ENABLED
+#define MODULE_EXAMPLE_ENABLED (1)
+#endif
+
+#ifndef MODULE_FOO_ENABLED
+#define MODULE_FOO_ENABLED (1)
+#endif
