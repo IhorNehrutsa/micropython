@@ -140,6 +140,7 @@ INC += -I$(TOP)/lib/mp-readline
 INC += -I$(TOP)/lib/netutils
 INC += -I$(TOP)/lib/timeutils
 INC += -I$(BUILD)
+INC += -I$(HOME)
 
 INC_ESPCOMP += -I$(ESPCOMP)/bootloader_support/include
 INC_ESPCOMP += -I$(ESPCOMP)/bootloader_support/include_bootloader
@@ -256,7 +257,7 @@ endif
 # these flags are common to C and C++ compilation
 CFLAGS_COMMON = -Os -ffunction-sections -fdata-sections -fstrict-volatile-bitfields \
 	-mlongcalls -nostdlib \
-	-Wall -Werror -Wno-error=unused-function -Wno-error=unused-but-set-variable \
+	-Wall -Wno-error=unused-function -Wno-error=unused-but-set-variable \
 	-Wno-error=unused-variable -Wno-error=deprecated-declarations \
 	-DESP_PLATFORM
 
@@ -271,7 +272,7 @@ CFLAGS += -DMICROPY_ESP_IDF_4=1
 endif
 
 # this is what ESPIDF uses for c++ compilation
-CXXFLAGS = -std=gnu++11 $(CFLAGS_COMMON) $(INC) $(INC_ESPCOMP)
+CXXFLAGS = -std=gnu++11 $(CFLAGS_COMMON) $(INC) $(INC_ESPCOMP) -I$(BOARD_DIR)
 
 LDFLAGS = -nostdlib -Map=$(@:.elf=.map) --cref
 LDFLAGS += --gc-sections -static -EL
@@ -357,6 +358,9 @@ SRC_C = \
 	$(wildcard $(BOARD_DIR)/*.c) \
 	$(SRC_MOD)
 
+SRC_CPP += \
+	$(SRC_MOD_CPP)
+
 EXTMOD_SRC_C += $(addprefix extmod/,\
 	modonewire.c \
 	)
@@ -379,6 +383,7 @@ DRIVERS_SRC_C = $(addprefix drivers/,\
 OBJ_MP =
 OBJ_MP += $(PY_O)
 OBJ_MP += $(addprefix $(BUILD)/, $(SRC_C:.c=.o))
+OBJ_MP += $(addprefix $(BUILD)/, $(SRC_CPP:.cpp=.o))
 OBJ_MP += $(addprefix $(BUILD)/, $(EXTMOD_SRC_C:.c=.o))
 OBJ_MP += $(addprefix $(BUILD)/, $(LIB_SRC_C:.c=.o))
 OBJ_MP += $(addprefix $(BUILD)/, $(DRIVERS_SRC_C:.c=.o))
@@ -387,7 +392,7 @@ OBJ_MP += $(addprefix $(BUILD)/, $(DRIVERS_SRC_C:.c=.o))
 $(OBJ_MP): CFLAGS += -Wdouble-promotion -Wfloat-conversion
 
 # List of sources for qstr extraction
-SRC_QSTR += $(SRC_C) $(EXTMOD_SRC_C) $(LIB_SRC_C) $(DRIVERS_SRC_C)
+SRC_QSTR += $(SRC_C) $(SRC_CPP) $(EXTMOD_SRC_C) $(LIB_SRC_C) $(DRIVERS_SRC_C)
 # Append any auto-generated sources that are needed by sources listed in SRC_QSTR
 SRC_QSTR_AUTO_DEPS +=
 
@@ -796,7 +801,7 @@ $(Q)$(CXX) $(CXXFLAGS) -c -MD -o $@ $<
   $(RM) -f $(@:.o=.d)
 endef
 
-vpath %.cpp . $(TOP)
+vpath %.cpp . $(TOP) $(USER_C_MODULES)
 $(BUILD)/%.o: %.cpp
 	$(call compile_cxx)
 
