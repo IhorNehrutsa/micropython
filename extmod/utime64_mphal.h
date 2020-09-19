@@ -28,9 +28,11 @@
 
 #include "py/obj.h"
 
-MP_DECLARE_CONST_FUN_OBJ_0(mp_utime_ticks_ms64_obj);
-MP_DECLARE_CONST_FUN_OBJ_0(mp_utime_ticks_us64_obj);
-MP_DECLARE_CONST_FUN_OBJ_2(mp_utime_ticks_diff64_obj);
-MP_DECLARE_CONST_FUN_OBJ_2(mp_utime_ticks_add64_obj);
+#define MICROPY_PY_UTIME64_TICKS_PERIOD 0x4000000000000000
+
+MP_DECLARE_CONST_FUN_OBJ_0(mp_utime64_ticks_ms_obj);
+MP_DECLARE_CONST_FUN_OBJ_0(mp_utime64_ticks_us_obj);
+MP_DECLARE_CONST_FUN_OBJ_2(mp_utime64_ticks_diff_obj);
+MP_DECLARE_CONST_FUN_OBJ_2(mp_utime64_ticks_add_obj);
 
 #endif // MICROPY_INCLUDED_EXTMOD_UTIME64_MPHAL_H

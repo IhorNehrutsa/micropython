@@ -25,31 +25,28 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-/*
+
 #include <stdio.h>
 #include <string.h>
 #include <sys/time.h>
 
 #include "py/runtime.h"
 #include "lib/timeutils/timeutils.h"
-#include "extmod/utime_mphal.h"
-*/
-#include "utime64_mphal.h"
+#include "extmod/utime64_mphal.h"
 
-
-STATIC const mp_rom_map_elem_t time_module_globals_table[] = {
+STATIC const mp_rom_map_elem_t utime64_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_utime64) },
 
-    { MP_ROM_QSTR(MP_QSTR_ticks_ms64), MP_ROM_PTR(&mp_utime_ticks_ms64_obj) },
-    { MP_ROM_QSTR(MP_QSTR_ticks_us64), MP_ROM_PTR(&mp_utime_ticks_us64_obj) },
-    { MP_ROM_QSTR(MP_QSTR_ticks_cpu), MP_ROM_PTR(&mp_utime_ticks_cpu64_obj) },
-    { MP_ROM_QSTR(MP_QSTR_ticks_add64), MP_ROM_PTR(&mp_utime_ticks_add64_obj) },
-    { MP_ROM_QSTR(MP_QSTR_ticks_diff64), MP_ROM_PTR(&mp_utime_ticks_diff64_obj) },
+    { MP_ROM_QSTR(MP_QSTR_ticks_ms), MP_ROM_PTR(&mp_utime64_ticks_ms_obj) },
+    { MP_ROM_QSTR(MP_QSTR_ticks_us), MP_ROM_PTR(&mp_utime64_ticks_us_obj) },
+//  { MP_ROM_QSTR(MP_QSTR_ticks_cpu), MP_ROM_PTR(&mp_utime64_ticks_cpu_obj) },
+    { MP_ROM_QSTR(MP_QSTR_ticks_add), MP_ROM_PTR(&mp_utime64_ticks_add_obj) },
+    { MP_ROM_QSTR(MP_QSTR_ticks_diff), MP_ROM_PTR(&mp_utime64_ticks_diff_obj) },
 };
 
-STATIC MP_DEFINE_CONST_DICT(time_module_globals, time_module_globals_table);
+STATIC MP_DEFINE_CONST_DICT(utime64_module_globals, utime64_module_globals_table);
 
 const mp_obj_module_t utime64_module = {
     .base = { &mp_type_module },
-    .globals = (mp_obj_dict_t *)&time_module_globals,
+    .globals = (mp_obj_dict_t *)&utime64_module_globals,
 };
