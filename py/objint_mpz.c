@@ -447,6 +447,32 @@ mp_uint_t mp_obj_int_get_uint_checked(mp_const_obj_t self_in) {
     mp_raise_msg(&mp_type_OverflowError, MP_ERROR_TEXT("overflow converting long int to machine word"));
 }
 
+int64_t mp_obj_int64_get_checked(mp_const_obj_t self_in) {
+    if (mp_obj_is_small_int(self_in)) {
+        return MP_OBJ_SMALL_INT_VALUE(self_in);
+    } else {
+        const mp_obj_int_t *self = MP_OBJ_TO_PTR(self_in);
+        int64_t value;
+        if (mpz_as_int64_checked(&self->mpz, &value)) {
+            return value;
+        }
+    }
+    mp_raise_msg(&mp_type_OverflowError, MP_ERROR_TEXT("overflow converting int64 to machine word"));
+}
+
+uint64_t mp_obj_uint64_get_checked(mp_const_obj_t self_in) {
+    if (mp_obj_is_small_int(self_in)) {
+        return MP_OBJ_SMALL_INT_VALUE(self_in);
+    } else {
+        const mp_obj_int_t *self = MP_OBJ_TO_PTR(self_in);
+        uint64_t value;
+        if (mpz_as_uint64_checked(&self->mpz, &value)) {
+            return value;
+        }
+    }
+    mp_raise_msg(&mp_type_OverflowError, MP_ERROR_TEXT("overflow converting uint64 to machine word"));
+}
+
 #if MICROPY_PY_BUILTINS_FLOAT
 mp_float_t mp_obj_int_as_float_impl(mp_obj_t self_in) {
     assert(mp_obj_is_type(self_in, &mp_type_int));

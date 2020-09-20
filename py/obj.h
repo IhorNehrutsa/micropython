@@ -776,6 +776,7 @@ static inline bool mp_obj_is_integer(mp_const_obj_t o) {
     return mp_obj_is_int(o) || mp_obj_is_bool(o);
 }                                                                                                        // returns true if o is bool, small int or long int
 mp_int_t mp_obj_get_int(mp_const_obj_t arg);
+int64_t mp_obj_get_int64(mp_const_obj_t arg);
 mp_int_t mp_obj_get_int_truncated(mp_const_obj_t arg);
 bool mp_obj_get_int_maybe(mp_const_obj_t arg, mp_int_t *value);
 #if MICROPY_PY_BUILTINS_FLOAT
@@ -804,6 +805,8 @@ mp_int_t mp_obj_int_get_truncated(mp_const_obj_t self_in);
 mp_int_t mp_obj_int_get_checked(mp_const_obj_t self_in);
 // Will raise exception if value is negative or doesn't fit into mp_uint_t
 mp_uint_t mp_obj_int_get_uint_checked(mp_const_obj_t self_in);
+int64_t mp_obj_int64_get_checked(mp_const_obj_t self_in);
+uint64_t mp_obj_uint64_get_checked(mp_const_obj_t self_in);
 
 // exception
 #define mp_obj_is_native_exception_instance(o) (mp_obj_get_type(o)->make_new == mp_obj_exception_make_new)
