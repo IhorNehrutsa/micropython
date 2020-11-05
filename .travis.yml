@@ -31,6 +31,7 @@ jobs:
       install:
         - sudo apt-get install uncrustify python3-pip
         - uncrustify --version
+        - pip3 install --user setuptools
         - pip3 install --user black
         - black --version
       script:
@@ -53,7 +54,7 @@ jobs:
           zephyrprojectrtos/ci:v0.11.8
         - docker ps -a
       install:
-        - docker exec zephyr-ci west init --mr v2.3.0 /zephyrproject
+        - docker exec zephyr-ci west init --mr v2.4.0 /zephyrproject
         - docker exec -w /zephyrproject zephyr-ci west update
         - docker exec -w /zephyrproject zephyr-ci west zephyr-export
       script:
@@ -98,7 +99,7 @@ jobs:
         - make ${MAKEOPTS} -C ports/stm32 submodules
         - git submodule update --init lib/btstack
         - make ${MAKEOPTS} -C ports/stm32 BOARD=NUCLEO_F091RC
-        - make ${MAKEOPTS} -C ports/stm32 BOARD=PYBV11 MICROPY_PY_WIZNET5K=5200 MICROPY_PY_CC3K=1
+        - make ${MAKEOPTS} -C ports/stm32 BOARD=PYBV11 MICROPY_PY_WIZNET5K=5200 MICROPY_PY_CC3K=1 USER_C_MODULES=../../examples/usercmodule CFLAGS_EXTRA="-DMODULE_CEXAMPLE_ENABLED=1 -DMODULE_CPPEXAMPLE_ENABLED=1"
         - make ${MAKEOPTS} -C ports/stm32 BOARD=PYBD_SF2
         - make ${MAKEOPTS} -C ports/stm32 BOARD=PYBD_SF6 NANBOX=1 MICROPY_BLUETOOTH_NIMBLE=0 MICROPY_BLUETOOTH_BTSTACK=1
         - make ${MAKEOPTS} -C ports/stm32 BOARD=NUCLEO_H743ZI CFLAGS_EXTRA='-DMICROPY_PY_THREAD=1'
@@ -164,7 +165,7 @@ jobs:
     - stage: test
       name: "unix coverage 32-bit build and tests"
       install:
-        - sudo apt-get install gcc-multilib libffi-dev:i386
+        - sudo apt-get install gcc-multilib g++-multilib libffi-dev:i386
         - sudo apt-get install python3-pip
         - sudo pip3 install setuptools
         - sudo pip3 install pyelftools

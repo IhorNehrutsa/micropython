@@ -8,6 +8,7 @@ This script works with Python 2.6, 2.7, 3.3 and 3.4.
 from __future__ import print_function
 
 import re
+import subprocess
 import sys
 import io
 import os
@@ -21,6 +22,31 @@ _MODE_COMPRESS = "compress"
 
 # File types which will be scanned.
 _FILE_TYPES = ['.c', '.cc', '.cpp', '.cxx']
+
+def preprocess():
+    if any(src in args.dependencies for src in args.changed_sources):
+        sources = args.sources
+    elif any(args.changed_sources):
+        sources = args.changed_sources
+    else:
+        sources = args.sources
+    csources = []
+    cxxsources = []
+    for source in sources:
+        if source.endswith(".cpp"):
+            cxxsources.append(source)
+        else:
+            csources.append(source)
+    try:
+        os.makedirs(os.path.dirname(args.output[0]))
+    except OSError:
+        pass
+    with open(args.output[0], "w") as out_file:
+        if csources:
+            subprocess.check_call(args.pp + args.cflags + csources, stdout=out_file)
+        if cxxsources:
+            subprocess.check_call(args.pp + args.cxxflags + cxxsources, stdout=out_file)
+
 
 def write_out(fname, output):
     if output:
@@ -46,7 +72,7 @@ def process_file(f):
             m = re_line.match(line)
             assert m is not None
             fname = m.group(1)
-            if os.path.splitext(fname)[1].lower() not in _FILE_TYPES:
+            if os.path.splitext(fname)[1] not in [".c", ".cpp"]:
                 continue
             if fname != last_fname:
                 write_out(last_fname, output)
@@ -107,7 +133,7 @@ def cat_together():
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 6:
+    if len(sys.argv) < 6:
         print("usage: %s command mode input_filename output_dir output_file" % sys.argv[0])
         sys.exit(2)
 
@@ -116,6 +142,37 @@ if __name__ == "__main__":
 
     args = Args()
     args.command = sys.argv[1]
+
+    if args.command == "pp":
+        named_args = {
+            s: []
+            for s in [
+                "pp",
+                "output",
+                "cflags",
+                "cxxflags",
+                "sources",
+                "changed_sources",
+                "dependencies",
+            ]
+        }
+
+        for arg in sys.argv[1:]:
+            if arg in named_args:
+                current_tok = arg
+            else:
+                named_args[current_tok].append(arg)
+
+        if not named_args["pp"] or len(named_args["output"]) != 1:
+            print("usage: %s %s ..." % (sys.argv[0], " ... ".join(named_args)))
+            sys.exit(2)
+
+        for k, v in named_args.items():
+            setattr(args, k, v)
+
+        preprocess()
+        sys.exit(0)
+
     args.mode = sys.argv[2]
     args.input_filename = sys.argv[3]  # Unused for command=cat
     args.output_dir = sys.argv[4]
