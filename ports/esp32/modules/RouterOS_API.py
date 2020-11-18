@@ -37,10 +37,11 @@ import uerrno
 
 class ApiRos:
     "RouterOS API"
-    INIT = 0 # after init
-    LOST = 1 # lost connection in wireless
+    INIT = 0  # after init
+    LOST = 1  # lost connection in wireless
     BAD = 2
     OK = 3
+
     def __init__(self, skt):
         self.skt = skt
         self.e = None
@@ -114,6 +115,7 @@ class ApiRos:
                 return r
             r.append(w)
 
+
 #     @micropython.native
 #     def readAll(self):
 #         res = b""
@@ -133,7 +135,7 @@ class ApiRos:
 #         if (res == b"\x05!done\x00"):
 #             self.state = self.LOST
 #             return b""
-#             
+#
 #         if (res[0:4] != b"\x03!re") or (res[-7:] != b"\x05!done\x00"):
 #             print("res[0:4], res[-7:]", res[0:4], res[0:4] != b"\x03!re", res[-7:], res[-7:] != b"\x05!done\x00")
 #             #print("---res---", res, "---res---")
@@ -141,7 +143,7 @@ class ApiRos:
 #             return b""
 #         self.state = self.OK
 #         return res
-#     
+#
 #     #@micropython.native
 #     def readAll_bytearray(self):
 #         writeSentence(self.skt, self.command)
@@ -159,7 +161,7 @@ class ApiRos:
 #             pass
 #         while ((times_ms() - t) < 1000) and (res[-7:] != b"\x05!done\x00"):
 #             #t1 = times_ms()
-#             try: 
+#             try:
 #                 res += self.skt.recv(1024 * 3)
 #             except:
 #                 pass
@@ -176,7 +178,7 @@ class ApiRos:
     @micropython.native
     def handle_command(self):
         self.value = {}
-        
+
         res = b""
         writeSentence(self.skt, self.command)
         t = times_ms()
@@ -194,13 +196,13 @@ class ApiRos:
                 #else:
                 #    pass
                 #### continue AGAIN
-                
+
         if (res == b"\x05!done\x00"):
             self.state = self.LOST
             return
-            
+
         if (res[0:4] != b"\x03!re") or (res[-7:] != b"\x05!done\x00"):
-        #if res[-7:] != b"\x05!done\x00":
+            #if res[-7:] != b"\x05!done\x00":
             print("res[0:4], res[-7:]", res[0:4], res[0:4] != b"\x03!re", res[-7:], res[-7:] != b"\x05!done\x00")
             #print("---res---", res, "---res---")
             self.state = self.BAD
@@ -226,10 +228,10 @@ class ApiRos:
         if n == len(self.params):
             self.state = self.OK
             #print(self.value)
-        else:    
+        else:
             self.value = {}
             self.state = self.BAD
-        
+
 
 @micropython.native
 def writeSentence(skt, words):

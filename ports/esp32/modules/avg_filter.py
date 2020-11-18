@@ -6,7 +6,7 @@ http://www.autex.spb.su/download/dsp/dsp_guide/ch15en-ru.pdf
 FILTER_LEN = 20
 
 
-class MovingAverageFilter(): 
+class MovingAverageFilter():
     def __init__(self, length=FILTER_LEN):
         self.length = length
         self.values = [None] * length  # 1
@@ -28,7 +28,7 @@ class MovingAverageFilter():
             self.i = 0
             self.is_full = True
         self.sum += value
-        
+
     def average(self):
         if self.is_full:
             return self.sum / self.length
@@ -36,6 +36,3 @@ class MovingAverageFilter():
             return self.sum / self.i
         else:
             return 0
-  
-        
-        
