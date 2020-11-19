@@ -165,7 +165,7 @@ class AS5x47():
     #
     # The ESP32 polarity is the idle state of SCK.
     # The ESP32 phase=0 means sample on the first edge of SCK, phase=1 means the second.
-    def __init__(self, _CSn=HSPI_cs0, _SPI_ID=HSPI_ID, _sck=HSPI_sck, _mosi=HSPI_mosi, _miso=HSPI_miso, _baudrate=10000000, _polarity=0, _phase=1, _bits=16, _firstbit=SPI.MSB):
+    def __init__(self, _CSn=HSPI_cs1, _SPI_ID=HSPI_ID, _sck=HSPI_sck, _mosi=HSPI_mosi, _miso=HSPI_miso, _baudrate=10000000, _polarity=0, _phase=1, _bits=16, _firstbit=SPI.MSB):
         # Initialize SPI Communication
         self.CSn = _CSn
         self.csn = Pin(self.CSn, Pin.OUT, value=1)
@@ -174,7 +174,7 @@ class AS5x47():
         self.receivedData = bytearray(2)
         self.buff_command = bytearray(2)
         self.buff_contentFrame = bytearray(2)
-        self.tclk_2_us = 1000000 // (_baudrate * 2) + 1  # Tclk / 2 us
+        self.tclk_2_us = 1000000 // (_baudrate * 2) + 1  # tH = tclk / 2 us # Time between last falling edge of CLK and rising edge of CSn
 
     def __del__(self):
         try:
@@ -214,7 +214,8 @@ class AS5x47():
         # Send Nop Command while receiving data
         self.csn.off()
         #time.sleep_us(1)
-        self.spi.write_readinto(bytes(b'\xc0\x00'), self.receivedData)
+        #self.spi.write_readinto(bytes(b'\xc0\x00'), self.receivedData)
+        self.spi.write_readinto(self.sendCommand, self.receivedData)
         time.sleep_us(self.tclk_2_us)
         self.csn.on()
 
@@ -290,176 +291,180 @@ class AS5x47():
         self.writeRegister(ZPOSL, zposl)
 
 
-def printDebugString(as5x47):
-    print("======== AS5X47 Debug ========")
-
-    readDataFrame = as5x47.readRegister(ERRFL)
-    errfl = uctypes.struct(uctypes.addressof(readDataFrame), ERRFL_struct, uctypes.BIG_ENDIAN)
-    print("------- ERRFL Register :")
-    print("|   Reading Error: ", readDataFrame.EF)
-    print("|   FRERR: ", errfl.FRERR)
-    print("|   INVCOMM: ", errfl.INVCOMM)
-    print("|   PARERR: ", errfl.PARERR)
-
-    readDataFrame = as5x47.readRegister(PROG)
-    prog = uctypes.struct(uctypes.addressof(readDataFrame), PROG_struct, uctypes.BIG_ENDIAN)
-    print("------- PROG Register: ")
-    print("|   Reading Error: ", readDataFrame.EF)
-    print("|   PROGEN: ", prog.PROGEN)
-    print("|   OTPREF: ", prog.OTPREF)
-    print("|   PROGOTP: ", prog.PROGOTP)
-    print("|   PROGVER: ", prog.PROGVER)
-
-    readDataFrame = as5x47.readRegister(DIAAGC)
-    diaagc = uctypes.struct(uctypes.addressof(readDataFrame), DIAAGC_struct, uctypes.BIG_ENDIAN)
-    print("|------- DIAAGC Register: ")
-    print("|   Reading Error: ", readDataFrame.EF)
-    print("|   AGC: ", diaagc.AGC)
-    print("|   LF: ", diaagc.LF)
-    print("|   COF: ", diaagc.COF)
-    print("|   MAGH: ", diaagc.MAGH)
-    print("|   MAGL: ", diaagc.MAGL)
-
-    readDataFrame = as5x47.readRegister(MAG)
-    mag = uctypes.struct(uctypes.addressof(readDataFrame), MAG_struct, uctypes.BIG_ENDIAN)
-    print("|------- MAG Register: ")
-    print("|   Reading Error: ", readDataFrame.EF)
-    print("|   CMAG: ", mag.CMAG)
-
-    readDataFrame = as5x47.readRegister(ANGLEUNC)
-    angle = uctypes.struct(uctypes.addressof(readDataFrame), ANGLEUNC_struct, uctypes.BIG_ENDIAN)
-    print("|------- ANGLE Register: ")
-    print("|   Reading Error: ", readDataFrame.EF)
-    print("|   CORDICANG: ", angle.CORDICANG)
-    angleCORDICANG = angle.CORDICANG
-
-    DataFrame = as5x47.newDataFrame()
-    zposm = uctypes.struct(uctypes.addressof(DataFrame), ZPOSM_struct, uctypes.BIG_ENDIAN)
-    zposm.ZPOSM = 0
-    #as5x47.writeRegister(ZPOSM, DataFrame.DATA)
-
-    zposl = uctypes.struct(uctypes.addressof(DataFrame), ZPOSL_struct, uctypes.BIG_ENDIAN)
-    zposl.ZPOSL = 0
-    #as5x47.writeRegister(ZPOSL, DataFrame.DATA)
-    as5x47.writeZeroPosition(DataFrame.DATA, DataFrame.DATA)
-
-    readDataFrame = as5x47.readRegister(ANGLEUNC)
-    angle = uctypes.struct(uctypes.addressof(readDataFrame), ANGLEUNC_struct, uctypes.BIG_ENDIAN)
-    print("|------- ANGLE Register: ")
-    print("|   Reading Error: ", readDataFrame.EF)
-    print("|   CORDICANG: ", angle.CORDICANG)
-    angleCORDICANG = angle.CORDICANG
-
-    readDataFrame = as5x47.readRegister(ANGLECOM)
-    anglecom = uctypes.struct(uctypes.addressof(readDataFrame), ANGLECOM_struct, uctypes.BIG_ENDIAN)
-    print("|------- ANGLECOM Register: ")
-    print("|   Reading Error: ", readDataFrame.EF)
-    print("|   DAECANG: ", anglecom.DAECANG)
-
-    readDataFrame = as5x47.readRegister(ZPOSM)
-    zposm = uctypes.struct(uctypes.addressof(readDataFrame), ZPOSM_struct, uctypes.BIG_ENDIAN)
-    print("|------- ZPOSM Register: ")
-    print("|   Reading Error: ", readDataFrame.EF)
-    print("|   ZPOSM: ", zposm.ZPOSM)
-
-    zposm.ZPOSM = (angleCORDICANG >> 6) & 0xFF
-    as5x47.writeRegister(ZPOSM, readDataFrame.DATA)
-
-    readDataFrame = as5x47.readRegister(ZPOSM)
-    zposm = uctypes.struct(uctypes.addressof(readDataFrame), ZPOSM_struct, uctypes.BIG_ENDIAN)
-    print("|------- ZPOSM Register: ")
-    print("|   Reading Error: ", readDataFrame.EF)
-    print("|   ZPOSM: ", zposm.ZPOSM)
-
-    readDataFrame = as5x47.readRegister(ZPOSL)
-    zposl = uctypes.struct(uctypes.addressof(readDataFrame), ZPOSL_struct, uctypes.BIG_ENDIAN)
-    print("|------- ZPOSL Register: ")
-    print("|   Reading Error: ", readDataFrame.EF)
-    print("|   ZPOSL: ", zposl.ZPOSL)
-    print("|   COMP_L_ERROR_EN: ", zposl.COMP_L_ERROR_EN)
-    print("|   COMP_H_ERROR_EN: ", zposl.COMP_H_ERROR_EN)
-
-    zposl.ZPOSL = angleCORDICANG & 0x3F
-    as5x47.writeRegister(ZPOSL, readDataFrame.DATA)
-
-    readDataFrame = as5x47.readRegister(ZPOSL)
-    zposl = uctypes.struct(uctypes.addressof(readDataFrame), ZPOSL_struct, uctypes.BIG_ENDIAN)
-    print("|------- ZPOSL Register: ")
-    print("|   Reading Error: ", readDataFrame.EF)
-    print("|   ZPOSL: ", zposl.ZPOSL)
-    print("|   COMP_L_ERROR_EN: ", zposl.COMP_L_ERROR_EN)
-    print("|   COMP_H_ERROR_EN: ", zposl.COMP_H_ERROR_EN)
-
-    readDataFrame = as5x47.readRegister(SETTINGS1)
-    settings1 = uctypes.struct(uctypes.addressof(readDataFrame), SETTINGS1_struct, uctypes.BIG_ENDIAN)
-    print("|------- SETTINGS1 Register: ")
-    print("|   Reading Error: ", readDataFrame.EF)
-    print("|   Factory_Setting: ", settings1.FACTORY_SETTING)
-    print("|   NOT_USED: ", settings1.NOT_USED)
-    print("|   DIR: ", settings1.DIR)
-    print("|   UVW_ABI: ", settings1.UVW_ABI)
-    print("|   DAECDIS: ", settings1.DAECDIS)
-    print("|   ABIBIN: ", settings1.ABIBIN)
-    print("|   DATASELECT: ", settings1.DATASELECT)
-    print("|   PWMON: ", settings1.PWMON)
-
-    settings1.DIR = 1
-    as5x47.writeRegister(SETTINGS1, readDataFrame.DATA)
-
-    readDataFrame = as5x47.readRegister(SETTINGS1)
-    settings1 = uctypes.struct(uctypes.addressof(readDataFrame), SETTINGS1_struct, uctypes.BIG_ENDIAN)
-    print("|------- SETTINGS1 Register: ")
-    print("|   Reading Error: ", readDataFrame.EF)
-    print("|   Factory_Setting: ", settings1.FACTORY_SETTING)
-    print("|   NOT_USED: ", settings1.NOT_USED)
-    print("|   DIR: ", settings1.DIR)
-    print("|   UVW_ABI: ", settings1.UVW_ABI)
-    print("|   DAECDIS: ", settings1.DAECDIS)
-    print("|   ABIBIN: ", settings1.ABIBIN)
-    print("|   DATASELECT: ", settings1.DATASELECT)
-    print("|   PWMON: ", settings1.PWMON)
-
-    readDataFrame = as5x47.readRegister(SETTINGS2)
-    settings2 = uctypes.struct(uctypes.addressof(readDataFrame), SETTINGS2_struct, uctypes.BIG_ENDIAN)
-    print("|------- SETTINGS2 Register: ")
-    print("|   Reading Error: ", readDataFrame.EF)
-    print("|   UVWPP: ", settings2.UVWPP)
-    print("|   HYS: ", settings2.HYS)
-    print("|   ABIRES: ", settings2.ABIRES)
-
-    print("==============================")
-
-
 # ----------------------------------------------------------------------
 if __name__ == "__main__":
+
+    def printDebugString(as5x47):
+        print("======== AS5X47 Debug ========")
+
+        readDataFrame = as5x47.readRegister(ERRFL)
+        errfl = uctypes.struct(uctypes.addressof(readDataFrame), ERRFL_struct, uctypes.BIG_ENDIAN)
+        print("------- ERRFL Register :")
+        print("|   Reading Error: ", readDataFrame.EF)
+        print("|   FRERR: ", errfl.FRERR)
+        print("|   INVCOMM: ", errfl.INVCOMM)
+        print("|   PARERR: ", errfl.PARERR)
+
+        readDataFrame = as5x47.readRegister(PROG)
+        prog = uctypes.struct(uctypes.addressof(readDataFrame), PROG_struct, uctypes.BIG_ENDIAN)
+        print("------- PROG Register: ")
+        print("|   Reading Error: ", readDataFrame.EF)
+        print("|   PROGEN: ", prog.PROGEN)
+        print("|   OTPREF: ", prog.OTPREF)
+        print("|   PROGOTP: ", prog.PROGOTP)
+        print("|   PROGVER: ", prog.PROGVER)
+
+        readDataFrame = as5x47.readRegister(DIAAGC)
+        diaagc = uctypes.struct(uctypes.addressof(readDataFrame), DIAAGC_struct, uctypes.BIG_ENDIAN)
+        print("|------- DIAAGC Register: ")
+        print("|   Reading Error: ", readDataFrame.EF)
+        print("|   AGC: ", diaagc.AGC)
+        print("|   LF: ", diaagc.LF)
+        print("|   COF: ", diaagc.COF)
+        print("|   MAGH: ", diaagc.MAGH)
+        print("|   MAGL: ", diaagc.MAGL)
+
+        readDataFrame = as5x47.readRegister(MAG)
+        mag = uctypes.struct(uctypes.addressof(readDataFrame), MAG_struct, uctypes.BIG_ENDIAN)
+        print("|------- MAG Register: ")
+        print("|   Reading Error: ", readDataFrame.EF)
+        print("|   CMAG: ", mag.CMAG)
+
+        readDataFrame = as5x47.readRegister(ANGLEUNC)
+        angle = uctypes.struct(uctypes.addressof(readDataFrame), ANGLEUNC_struct, uctypes.BIG_ENDIAN)
+        print("|------- ANGLE Register: ")
+        print("|   Reading Error: ", readDataFrame.EF)
+        print("|   CORDICANG: ", angle.CORDICANG)
+        angleCORDICANG = angle.CORDICANG
+
+        DataFrame = as5x47.newDataFrame()
+        zposm = uctypes.struct(uctypes.addressof(DataFrame), ZPOSM_struct, uctypes.BIG_ENDIAN)
+        zposm.ZPOSM = 0
+        #as5x47.writeRegister(ZPOSM, DataFrame.DATA)
+
+        zposl = uctypes.struct(uctypes.addressof(DataFrame), ZPOSL_struct, uctypes.BIG_ENDIAN)
+        zposl.ZPOSL = 0
+        #as5x47.writeRegister(ZPOSL, DataFrame.DATA)
+        as5x47.writeZeroPosition(DataFrame.DATA, DataFrame.DATA)
+
+        readDataFrame = as5x47.readRegister(ANGLEUNC)
+        angle = uctypes.struct(uctypes.addressof(readDataFrame), ANGLEUNC_struct, uctypes.BIG_ENDIAN)
+        print("|------- ANGLE Register: ")
+        print("|   Reading Error: ", readDataFrame.EF)
+        print("|   CORDICANG: ", angle.CORDICANG)
+        angleCORDICANG = angle.CORDICANG
+
+        readDataFrame = as5x47.readRegister(ANGLECOM)
+        anglecom = uctypes.struct(uctypes.addressof(readDataFrame), ANGLECOM_struct, uctypes.BIG_ENDIAN)
+        print("|------- ANGLECOM Register: ")
+        print("|   Reading Error: ", readDataFrame.EF)
+        print("|   DAECANG: ", anglecom.DAECANG)
+
+        readDataFrame = as5x47.readRegister(ZPOSM)
+        zposm = uctypes.struct(uctypes.addressof(readDataFrame), ZPOSM_struct, uctypes.BIG_ENDIAN)
+        print("|------- ZPOSM Register: ")
+        print("|   Reading Error: ", readDataFrame.EF)
+        print("|   ZPOSM: ", zposm.ZPOSM)
+
+        zposm.ZPOSM = (angleCORDICANG >> 6) & 0xFF
+        as5x47.writeRegister(ZPOSM, readDataFrame.DATA)
+
+        readDataFrame = as5x47.readRegister(ZPOSM)
+        zposm = uctypes.struct(uctypes.addressof(readDataFrame), ZPOSM_struct, uctypes.BIG_ENDIAN)
+        print("|------- ZPOSM Register: ")
+        print("|   Reading Error: ", readDataFrame.EF)
+        print("|   ZPOSM: ", zposm.ZPOSM)
+
+        readDataFrame = as5x47.readRegister(ZPOSL)
+        zposl = uctypes.struct(uctypes.addressof(readDataFrame), ZPOSL_struct, uctypes.BIG_ENDIAN)
+        print("|------- ZPOSL Register: ")
+        print("|   Reading Error: ", readDataFrame.EF)
+        print("|   ZPOSL: ", zposl.ZPOSL)
+        print("|   COMP_L_ERROR_EN: ", zposl.COMP_L_ERROR_EN)
+        print("|   COMP_H_ERROR_EN: ", zposl.COMP_H_ERROR_EN)
+
+        zposl.ZPOSL = angleCORDICANG & 0x3F
+        as5x47.writeRegister(ZPOSL, readDataFrame.DATA)
+
+        readDataFrame = as5x47.readRegister(ZPOSL)
+        zposl = uctypes.struct(uctypes.addressof(readDataFrame), ZPOSL_struct, uctypes.BIG_ENDIAN)
+        print("|------- ZPOSL Register: ")
+        print("|   Reading Error: ", readDataFrame.EF)
+        print("|   ZPOSL: ", zposl.ZPOSL)
+        print("|   COMP_L_ERROR_EN: ", zposl.COMP_L_ERROR_EN)
+        print("|   COMP_H_ERROR_EN: ", zposl.COMP_H_ERROR_EN)
+
+        readDataFrame = as5x47.readRegister(SETTINGS1)
+        settings1 = uctypes.struct(uctypes.addressof(readDataFrame), SETTINGS1_struct, uctypes.BIG_ENDIAN)
+        print("|------- SETTINGS1 Register: ")
+        print("|   Reading Error: ", readDataFrame.EF)
+        print("|   Factory_Setting: ", settings1.FACTORY_SETTING)
+        print("|   NOT_USED: ", settings1.NOT_USED)
+        print("|   DIR: ", settings1.DIR)
+        print("|   UVW_ABI: ", settings1.UVW_ABI)
+        print("|   DAECDIS: ", settings1.DAECDIS)
+        print("|   ABIBIN: ", settings1.ABIBIN)
+        print("|   DATASELECT: ", settings1.DATASELECT)
+        print("|   PWMON: ", settings1.PWMON)
+
+        settings1.DIR = 1
+        as5x47.writeRegister(SETTINGS1, readDataFrame.DATA)
+
+        readDataFrame = as5x47.readRegister(SETTINGS1)
+        settings1 = uctypes.struct(uctypes.addressof(readDataFrame), SETTINGS1_struct, uctypes.BIG_ENDIAN)
+        print("|------- SETTINGS1 Register: ")
+        print("|   Reading Error: ", readDataFrame.EF)
+        print("|   Factory_Setting: ", settings1.FACTORY_SETTING)
+        print("|   NOT_USED: ", settings1.NOT_USED)
+        print("|   DIR: ", settings1.DIR)
+        print("|   UVW_ABI: ", settings1.UVW_ABI)
+        print("|   DAECDIS: ", settings1.DAECDIS)
+        print("|   ABIBIN: ", settings1.ABIBIN)
+        print("|   DATASELECT: ", settings1.DATASELECT)
+        print("|   PWMON: ", settings1.PWMON)
+
+        readDataFrame = as5x47.readRegister(SETTINGS2)
+        settings2 = uctypes.struct(uctypes.addressof(readDataFrame), SETTINGS2_struct, uctypes.BIG_ENDIAN)
+        print("|------- SETTINGS2 Register: ")
+        print("|   Reading Error: ", readDataFrame.EF)
+        print("|   UVWPP: ", settings2.UVWPP)
+        print("|   HYS: ", settings2.HYS)
+        print("|   ABIRES: ", settings2.ABIRES)
+
+        print("==============================")
+
     try:
-        as5047d = AS5x47()  # _baudrate=10000000
+        as5047d = AS5x47(_CSn=HSPI_cs1, _baudrate=1000)  # _baudrate=10000000
         #as5047d = AS5x47(_SPI_ID=SOFT_SPI_ID, _baudrate=1000000, _polarity=0, _phase=1, _bits=8)  # 10000000
         #as5047d = AS5x47(_SPI_ID=SOFT_SPI_ID, _baudrate=10000, _bits=8)  #
         #as5047d = AS5x47(_SPI_ID=VSPI_ID, _sck=VSPI_sck, _mosi=VSPI_mosi, _miso=VSPI_miso, _baudrate=100000)
-        print("readAngleAgain()", as5047d.readAngleAgain())
         printDebugString(as5047d)
         print("readAngleCom()", as5047d.readAngleCom())
         print("readAngle()", as5047d.readAngle())
         print("readAngleAgain()", as5047d.readAngleAgain())
-        print("readAngleAgain()", as5047d.readAngleAgain())
+        t = time.ticks_ms()
         while 1:
             #as5047d.printDebugString()
             #print("AngleCom()", as5047d.readAngleCom())
             #print("Angle()", as5047d.readAngle())
             if 1:
-                print("")
-                a1 = as5047d.readAngleAgain()
-                a2 = as5047d.readAngleAgain()
-                a3 = as5047d.readAngleAgain()
-                a4 = as5047d.readAngleAgain()
-                a5 = as5047d.readAngleAgain()
-                print(a1)
-                print(a2)
-                print(a3)
-                print(a4)
-                print(a5)
-            time.sleep(0.5)
+                a1 = as5047d.readAngleCom()
+                a2 = as5047d.readAngleComAgain()
+                a3 = as5047d.readAngleComAgain()
+                a4 = as5047d.readAngleComAgain()
+                a5 = as5047d.readAngleComAgain()
+
+                if time.ticks_ms() - t > 500:
+                    t = time.ticks_ms()
+                    print("")
+                    #print("t", t)
+                    print(a1)
+                    print(a2)
+                    print(a3)
+                    print(a4)
+                    print(a5)
+
+            #time.sleep(0.5)
     except:
         raise
     finally:

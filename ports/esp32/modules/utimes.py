@@ -1,5 +1,5 @@
 #import sys
-from utime import ticks_us , ticks_diff
+from utime import ticks_us, ticks_diff
 
 is_micropython = True
 '''

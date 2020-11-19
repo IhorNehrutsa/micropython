@@ -25,34 +25,36 @@ def to180(degree):
 #  GetAngle - Converts accleration data to pitch & roll & yaw
 #===============================================================================
 @micropython.native
-def calc_yaw_pitch_roll(x, y, z): # x, y, z - Accelerometer output
+def calc_yaw_pitch_roll(x, y, z):  # x, y, z - Accelerometer output
     try:
-        yaw = atan2(sqrt(x * x + y * y) , z)  # θ
+        yaw = atan2(sqrt(x * x + y * y), z)  # θ
     except ZeroDivisionError:
         yaw = 0
 
     try:
-        pitch = atan2(x , sqrt(y * y + z * z))  # ρ
+        pitch = atan2(x, sqrt(y * y + z * z))  # ρ
     except ZeroDivisionError:
         pitch = 0
-        
+
     try:
-        roll = atan2(y , sqrt(x * x + z * z))  # φ
+        roll = atan2(y, sqrt(x * x + z * z))  # φ
     except ZeroDivisionError:
         roll = 0
     # convert radians into degrees
     return degrees(yaw), degrees(pitch), degrees(roll)
 
+
 @micropython.native
-def calc_pitch(x, y, z): # x, y, z - Accelerometer output
+def calc_pitch(x, y, z):  # x, y, z - Accelerometer output
     try:
-        return degrees(atan2(x , sqrt(y * y + z * z)))  # ρ
+        return degrees(atan2(x, sqrt(y * y + z * z)))  # ρ
     except ZeroDivisionError:
         return 0
-        
+
+
 @micropython.native
-def calc_roll(x, y, z): # x, y, z - Accelerometer output
+def calc_roll(x, y, z):  # x, y, z - Accelerometer output
     try:
-        return degrees(atan2(y , sqrt(x * x + z * z)))  # φ
+        return degrees(atan2(y, sqrt(x * x + z * z)))  # φ
     except ZeroDivisionError:
         return 0

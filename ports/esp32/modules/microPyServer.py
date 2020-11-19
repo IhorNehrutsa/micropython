@@ -13,8 +13,7 @@ import usocket as socket
 #import uselect as select
 #import ujson as json
 
-from utime import ticks_diff
-from utimes import times_ms
+from utime import ticks_diff, ticks_ms
 
 # Говорит о том, сколько дескрипторов единовременно могут быть открыты
 MAX_CONNECTIONS = 1
@@ -169,38 +168,38 @@ class MicroPyServer(object):
             return
         try:
             self._connect, self._client_address = self._socket.accept()
-            self._connect.setblocking(False) # ???
-            # self._connect.settimeout(5)
+            self._connect.setblocking(False)  # ???
+            #self._connect.settimeout(5) # time in seconds
         except Exception as e:
             if e.args[0] != uerrno.EAGAIN:
                 print("except : self._socket.accept():", e)
                 raise
             return
-        
+
         #print("do_recv 1")
         r = b""
         do_recv = True
-        t = times_ms()
-        while do_recv and (ticks_diff(times_ms(), t) < 50):
+        t = ticks_ms()
+        while do_recv and (ticks_diff(ticks_ms(), t) < 50):
             try:
                 rr = self._connect.recv(1024)
-#                 print("===")
-#                 print("rr", rr)
-#                 print("===")
-#                 print(str(rr, "utf8"))
-#                 print("===")
-                
+                #                 print("===")
+                #                 print("rr", rr)
+                #                 print("===")
+                #                 print(str(rr, "utf8"))
+                #                 print("===")
+
                 if rr == 0:
                     do_recv = False
                     print("web len(rr) == 0")
-                    self._connect.close() # ???
-                else:    
+                    self._connect.close()  # ???
+                else:
                     r += rr
                 if rr.find(b"\r\n\r\n") >= 0:
-#                    print('rr.find(b"\r\n\r\n")')
+                    #                    print('rr.find(b"\r\n\r\n")')
                     do_recv = False
             except Exception as e:
-#                print("Exception as e: ooo", e.args[0], e)
+                #                print("Exception as e: ooo", e.args[0], e)
                 if (e.args[0] != uerrno.EAGAIN):
                     print("Exception as e: aaa", e.args[0], e)
                     do_recv = False
@@ -211,7 +210,6 @@ class MicroPyServer(object):
             return
 
         try:
-            #request = self.get_request()
             request = str(r, "utf8")
 
             #if self._on_request_handler:
@@ -222,7 +220,7 @@ class MicroPyServer(object):
             #print(request)
 
             route = self.find_route(request)
-            #print("web route:", route)
+            print("web route:", route)
             if route:
                 route["handler"](request, self._arg)
             else:
@@ -232,7 +230,7 @@ class MicroPyServer(object):
             print(e.args[0], e)
             if (e.args[0] != uerrno.EAGAIN) and (e.args[0] != uerrno.ETIMEDOUT):
                 print("Exception as e: bbb", e.args[0], e)
-                self.internal_error(e)
+                #self.internal_error(e)
                 raise
 
     def start(self):
@@ -324,7 +322,7 @@ class MicroPyServer(object):
             return
 
         #print("22")
-        #t_ = times_ms()
+        #t_ = ticks_ms()
         try:
             # r = readWord(self._connect)
             r = self._connect.recv(1024)
@@ -340,7 +338,7 @@ class MicroPyServer(object):
             #raise
             return
 
-        #t = times_ms()
+        #t = ticks_ms()
         #if (t - t_ > 10):
         #    print("txt connect.recv(), ms", t - t_)
 
@@ -357,7 +355,7 @@ class MicroPyServer(object):
         len_txt = len(txt)
         if len_txt == 0:
             return
-        #t_ = times_ms()
+        #t_ = ticks_ms()
         try:
             n = 0
             while n < len_txt:
@@ -377,6 +375,6 @@ class MicroPyServer(object):
             #raise
             return
 
-        #t = times_ms()
+        #t = ticks_ms()
         #if (t - t_ > 10):
         #    print("txt connect.send(), ms", t - t_)
