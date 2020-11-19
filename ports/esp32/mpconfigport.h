@@ -8,6 +8,8 @@
 #include <alloca.h>
 #include "esp_system.h"
 
+//#include "py/obj.h"
+
 #if !MICROPY_ESP_IDF_4
 #include "rom/ets_sys.h"
 #endif
@@ -177,10 +179,13 @@
 #define mp_builtin_open mp_vfs_open
 #define mp_builtin_open_obj mp_vfs_open_obj
 
+//extern const mp_obj_type_t mp_type_EspError;
+
 // extra built in names to add to the global namespace
 #define MICROPY_PORT_BUILTINS \
     { MP_OBJ_NEW_QSTR(MP_QSTR_input), (mp_obj_t)&mp_builtin_input_obj }, \
     { MP_OBJ_NEW_QSTR(MP_QSTR_open), (mp_obj_t)&mp_builtin_open_obj },
+//  { MP_ROM_QSTR(MP_QSTR_EspError), MP_ROM_PTR(&mp_type_EspError) },
 
 // extra built in modules to add to the list of known ones
 extern const struct _mp_obj_module_t esp_module;
@@ -307,3 +312,20 @@ typedef long mp_off_t;
 #ifndef MODULE_FOO_ENABLED
 #define MODULE_FOO_ENABLED (1)
 #endif
+
+#ifndef MODULE_CONSTS_ENABLED
+#define MODULE_CONSTS_ENABLED (1)
+#endif
+
+#ifndef MODULE_ESP_ERR_ENABLED
+#define MODULE_ESP_ERR_ENABLED (1)
+#endif
+
+#ifndef MODULE_PCNT_ENABLED
+#define MODULE_PCNT_ENABLED (1)
+#endif
+
+#ifndef MODULE_QUAD_ENABLED
+#define MODULE_QUAD_ENABLED (1)
+#endif
+
