@@ -29,10 +29,11 @@
 extern const mp_obj_type_t esp32_partition_type;
 extern const mp_obj_type_t esp32_rmt_type;
 extern const mp_obj_type_t esp32_ulp_type;
+/*
 extern const mp_obj_type_t esp32_pcnt_type; 
 extern const mp_obj_type_t esp32_quad_type; 
 extern const mp_obj_type_t pcnt_PinPull_type;
 extern const mp_obj_type_t pcnt_Edge_type;
 extern const mp_obj_type_t pcnt_EncoderType_type;
-
+*/
 #endif // MICROPY_INCLUDED_ESP32_MODESP32_H
