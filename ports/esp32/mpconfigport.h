@@ -317,16 +317,3 @@ typedef long mp_off_t;
 #ifndef MODULE_CONSTS_ENABLED
 #define MODULE_CONSTS_ENABLED (1)
 #endif
-
-#ifndef MODULE_ESP_ERR_ENABLED
-#define MODULE_ESP_ERR_ENABLED (1)
-#endif
-
-#ifndef MODULE_PCNT_ENABLED
-#define MODULE_PCNT_ENABLED (1)
-#endif
-
-#ifndef MODULE_QUAD_ENABLED
-#define MODULE_QUAD_ENABLED (1)
-#endif
-

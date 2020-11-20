@@ -44,8 +44,8 @@ https://github.com/espressif/esp-idf/tree/master/examples/peripherals/pcnt/pulse
 #include "py/runtime.h"
 #include "driver/pcnt.h"
 
-#include "../esp_error.h"
-#include "pcnt_.h"
+#include "esp_error.h"
+#include "esp32_pcnt.h"
 
 //---------------------------------------
 static int machine_pin_get_gpio(mp_obj_t pin_in)
@@ -87,7 +87,7 @@ STATIC const mp_rom_map_elem_t pcnt_Edge_locals_dict_table[] = {
 };
 STATIC MP_DEFINE_CONST_DICT(pcnt_Edge_locals_dict, pcnt_Edge_locals_dict_table);
 
-STATIC const mp_obj_type_t pcnt_Edge_type = {
+const mp_obj_type_t pcnt_Edge_type = {
     { &mp_type_type },
     .name = MP_QSTR_Edge,
     .locals_dict = (void*)&pcnt_Edge_locals_dict,
@@ -109,7 +109,7 @@ STATIC const mp_rom_map_elem_t pcnt_PinPull_locals_dict_table[] = {
 };
 STATIC MP_DEFINE_CONST_DICT(pcnt_PinPull_locals_dict, pcnt_PinPull_locals_dict_table);
 
-STATIC const mp_obj_type_t pcnt_PinPull_type = {
+const mp_obj_type_t pcnt_PinPull_type = {
     { &mp_type_type },
     .name = MP_QSTR_PinPull,
     .locals_dict = (void*)&pcnt_PinPull_locals_dict,
@@ -124,17 +124,17 @@ typedef struct _mp_obj_EncoderType_t {
 
 // EncoderType constants
 // EncoderType stuff
-STATIC const mp_rom_map_elem_t quad_EncoderType_locals_dict_table[] = {
+STATIC const mp_rom_map_elem_t pcnt_EncoderType_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_FULL), MP_ROM_INT(FULL) },
     { MP_ROM_QSTR(MP_QSTR_HALF), MP_ROM_INT(HALF) },
     { MP_ROM_QSTR(MP_QSTR_SINGLE), MP_ROM_INT(SINGLE) },
 };
-STATIC MP_DEFINE_CONST_DICT(quad_EncoderType_locals_dict, quad_EncoderType_locals_dict_table);
+STATIC MP_DEFINE_CONST_DICT(pcnt_EncoderType_locals_dict, pcnt_EncoderType_locals_dict_table);
 
-STATIC const mp_obj_type_t quad_EncoderType_type = {
+const mp_obj_type_t pcnt_EncoderType_type = {
     { &mp_type_type },
     .name = MP_QSTR_EncoderType,
-    .locals_dict = (void*)&quad_EncoderType_locals_dict,
+    .locals_dict = (void*)&pcnt_EncoderType_locals_dict,
 };
 
 static pcnt_isr_handle_t pcnt_isr_handle = NULL;
@@ -281,7 +281,7 @@ static void attach_pcnt(pcnt_PCNT_obj_t *self, gpio_num_t a, gpio_num_t b, enum 
 }
 
 // class PCNT(object):
-STATIC const mp_obj_type_t esp32_pcnt_type;
+const mp_obj_type_t esp32_pcnt_type;
 
 // Defining PCNT methods
 // def PCNT.__init__(aPinNumber: int, bPinNumber: int=PCNT_PIN_NOT_USED, pin_pull_type: PinPull=DOWN)
@@ -1053,7 +1053,7 @@ STATIC const mp_rom_map_elem_t pcnt_PCNT_locals_dict_table[] = {
 STATIC MP_DEFINE_CONST_DICT(pcnt_PCNT_locals_dict, pcnt_PCNT_locals_dict_table);
 
 // Create the class-object itself
-STATIC const mp_obj_type_t esp32_pcnt_type = {
+const mp_obj_type_t esp32_pcnt_type = {
     { &mp_type_type },
     .name = MP_QSTR_PCNT,
     .make_new = pcnt_PCNT_make_new,
@@ -1064,7 +1064,7 @@ STATIC const mp_obj_type_t esp32_pcnt_type = {
 //====================================================================================
 // Defining classes
 // class QUAD(object):
-STATIC const mp_obj_type_t esp32_quad_type;
+const mp_obj_type_t esp32_quad_type;
 
 //-------------------------------------------------------------------------------------------------------------
 static void attach_quad(pcnt_PCNT_obj_t *self, gpio_num_t a, gpio_num_t b, enum encType et)
@@ -1294,7 +1294,7 @@ STATIC void quad_QUAD_print(const mp_print_t *print, mp_obj_t self_obj, mp_print
 }
 
 // Create the class-object itself
-STATIC const mp_obj_type_t esp32_quad_type = {
+const mp_obj_type_t esp32_quad_type = {
     { &mp_type_type },
     .name = MP_QSTR_QUAD,
     .print = quad_QUAD_print,
@@ -1349,7 +1349,7 @@ STATIC const mp_rom_map_elem_t pcnt_globals_table[] = {
     */
     { MP_ROM_QSTR(MP_QSTR_PinPull), MP_ROM_PTR(&pcnt_PinPull_type) },
     { MP_ROM_QSTR(MP_QSTR_Edge), MP_ROM_PTR(&pcnt_Edge_type) },
-    { MP_ROM_QSTR(MP_QSTR_EncoderType), MP_ROM_PTR(&quad_EncoderType_type) },
+    { MP_ROM_QSTR(MP_QSTR_EncoderType), MP_ROM_PTR(&pcnt_EncoderType_type) },
 };
 STATIC MP_DEFINE_CONST_DICT(pcnt_globals, pcnt_globals_table);
 
