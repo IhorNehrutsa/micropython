@@ -43,3 +43,5 @@ user.props
 ######################
 genrst/
 docs/_build/*
+
+*.bak
