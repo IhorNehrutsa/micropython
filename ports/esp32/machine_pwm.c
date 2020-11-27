@@ -305,7 +305,7 @@ STATIC mp_obj_t esp32_pwm_deinit(mp_obj_t self_in) {
             // Flag it unused
             timers[chan_timer[chan]].freq_hz = -1;
         }
-        chan_timer[chan] = -1;
+        chan_timer[chan] = -1; // channel now don't use a timer!!!
 
         // Mark it unused, and tell the hardware to stop routing
         chan_gpio[chan] = -1;
