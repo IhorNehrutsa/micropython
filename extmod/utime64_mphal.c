@@ -29,7 +29,7 @@
 #include "py/mpconfig.h"
 #if MICROPY_PY_UTIME64_MP_HAL
 
-//#include <string.h>
+// #include <string.h>
 
 #include "py/obj.h"
 #include "py/mphal.h"

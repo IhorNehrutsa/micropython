@@ -148,12 +148,12 @@ uint32_t mp_hal_ticks_ms(void) {
     return esp_timer_get_time() / 1000;
 }
 
-uint64_t mp_hal_ticks_ms64(void) {
-    return esp_timer_get_time() / 1000;
-}
-
 uint32_t mp_hal_ticks_us(void) {
     return esp_timer_get_time();
+}
+
+uint64_t mp_hal_ticks_ms64(void) {
+    return esp_timer_get_time() / 1000;
 }
 
 uint64_t mp_hal_ticks_us64(void) {

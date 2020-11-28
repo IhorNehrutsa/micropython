@@ -1650,7 +1650,6 @@ bool mpz_as_uint64_checked(const mpz_t *i, uint64_t *value) {
     return true;
 }
 
-// writes at most len bytes to buf (so buf should be zeroed before calling)
 void mpz_as_bytes(const mpz_t *z, bool big_endian, size_t len, byte *buf) {
     byte *b = buf;
     if (big_endian) {
