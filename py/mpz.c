@@ -1682,6 +1682,15 @@ void mpz_as_bytes(const mpz_t *z, bool big_endian, size_t len, byte *buf) {
             }
         }
     }
+
+    // fill remainder of buf with zero/sign extension of the integer
+    if (big_endian) {
+        len = b - buf;
+    } else {
+        len = buf + len - b;
+        buf = b;
+    }
+    memset(buf, z->neg ? 0xff : 0x00, len);
 }
 
 #if MICROPY_PY_BUILTINS_FLOAT
