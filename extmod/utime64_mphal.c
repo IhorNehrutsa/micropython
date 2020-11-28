@@ -54,11 +54,11 @@ MP_DEFINE_CONST_FUN_OBJ_0(mp_utime64_ticks_cpu_obj, utime64_ticks_cpu);
 
 STATIC mp_obj_t utime64_ticks_diff(mp_obj_t end_in, mp_obj_t start_in) {
     // we assume that the arguments come from ticks_xx so are long ints
-    uint64_t start = mp_obj_get_int(start_in);
-    uint64_t end = mp_obj_get_int(end_in);
+    uint64_t start = mp_obj_get_int64(start_in);
+    uint64_t end = mp_obj_get_int64(end_in);
     // Optimized formula avoiding if conditions. We adjust difference "forward",
     // wrap it around and adjust back.
-    int64_t diff = ((end - start + MICROPY_PY_UTIME64_TICKS_PERIOD / 2) & (MICROPY_PY_UTIME64_TICKS_PERIOD - 1)) // end - start; //
+    int64_t diff = ((end - start + MICROPY_PY_UTIME64_TICKS_PERIOD / 2) & (MICROPY_PY_UTIME64_TICKS_PERIOD - 1))
         - MICROPY_PY_UTIME64_TICKS_PERIOD / 2;
     return mp_obj_new_int_from_ll(diff);
 }
@@ -66,9 +66,9 @@ MP_DEFINE_CONST_FUN_OBJ_2(mp_utime64_ticks_diff_obj, utime64_ticks_diff);
 
 STATIC mp_obj_t utime64_ticks_add(mp_obj_t ticks_in, mp_obj_t delta_in) {
     // we assume that first argument come from ticks_xx so is long int
-    uint64_t ticks = mp_obj_get_int(ticks_in);
-    uint64_t delta = mp_obj_get_int(delta_in);
-    return mp_obj_new_int_from_ull((ticks + delta) & (MICROPY_PY_UTIME64_TICKS_PERIOD - 1)); //  & (MICROPY_PY_UTIME64_TICKS_PERIOD - 1)
+    uint64_t ticks = mp_obj_get_int64(ticks_in);
+    uint64_t delta = mp_obj_get_int64(delta_in);
+    return mp_obj_new_int_from_ull((ticks + delta) & (MICROPY_PY_UTIME64_TICKS_PERIOD - 1));
 }
 MP_DEFINE_CONST_FUN_OBJ_2(mp_utime64_ticks_add_obj, utime64_ticks_add);
 
