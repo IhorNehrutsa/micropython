@@ -31,20 +31,25 @@
 
 #include "py/obj.h"
 #include "py/mphal.h"
-//#include "py/smallint.h"
+#include "py/smallint.h"
 #include "py/runtime.h"
 
 #include "extmod/utime64_mphal.h"
 
 STATIC mp_obj_t utime64_ticks_ms(void) {
-    return mp_obj_new_int_from_ull(mp_hal_ticks_ms64() & (MICROPY_PY_UTIME64_TICKS_PERIOD - 1)); //  & (MICROPY_PY_UTIME64_TICKS_PERIOD - 1)
+    return mp_obj_new_int_from_ull(mp_hal_ticks_ms64() & (MICROPY_PY_UTIME64_TICKS_PERIOD - 1));
 }
 MP_DEFINE_CONST_FUN_OBJ_0(mp_utime64_ticks_ms_obj, utime64_ticks_ms);
 
 STATIC mp_obj_t utime64_ticks_us(void) {
-    return mp_obj_new_int_from_ull(mp_hal_ticks_us64() & (MICROPY_PY_UTIME64_TICKS_PERIOD - 1)); //  & (MICROPY_PY_UTIME64_TICKS_PERIOD - 1)
+    return mp_obj_new_int_from_ull(mp_hal_ticks_us64() & (MICROPY_PY_UTIME64_TICKS_PERIOD - 1));
 }
 MP_DEFINE_CONST_FUN_OBJ_0(mp_utime64_ticks_us_obj, utime64_ticks_us);
+
+STATIC mp_obj_t utime64_ticks_cpu(void) {
+    return mp_obj_new_int_from_ull(mp_hal_ticks_cpu64() & (MICROPY_PY_UTIME_TICKS_PERIOD - 1)); // uint64 as uint32
+}
+MP_DEFINE_CONST_FUN_OBJ_0(mp_utime64_ticks_cpu_obj, utime64_ticks_cpu);
 
 STATIC mp_obj_t utime64_ticks_diff(mp_obj_t end_in, mp_obj_t start_in) {
     // we assume that the arguments come from ticks_xx so are small ints

@@ -160,6 +160,10 @@ uint64_t mp_hal_ticks_us64(void) {
     return esp_timer_get_time();
 }
 
+uint64_t mp_hal_ticks_cpu64(void) {
+    return mp_hal_ticks_cpu(); // uint32 to uint64
+}
+
 void mp_hal_delay_ms(uint32_t ms) {
     uint64_t us = ms * 1000;
     uint64_t dt;
