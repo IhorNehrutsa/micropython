@@ -1,10 +1,10 @@
 /*
  * This file is part of the MicroPython project, http://micropython.org/
  *
+ * Development of the code in this file was sponsored by Microbric Pty Ltd
+ *
  * The MIT License (MIT)
  *
- * Copyright (c) 2013-2016 Damien P. George
- * Copyright (c) 2016 Paul Sokolovsky
  * Copyright (c) 2020 Ihor Nehrutsa
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -25,17 +25,15 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#ifndef MICROPY_INCLUDED_EXTMOD_UTIME64_MPHAL_H
-#define MICROPY_INCLUDED_EXTMOD_UTIME64_MPHAL_H
 
-#include "py/obj.h"
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(time_localtime_obj, 0, 1, time_localtime);
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(time_mktime_obj, time_mktime);
+MP_DEFINE_CONST_FUN_OBJ_0(time_time_obj, time_time);
 
-#define MICROPY_PY_UTIME64_TICKS_PERIOD 0x4000000000000000
-
-MP_DECLARE_CONST_FUN_OBJ_0(mp_utime64_ticks_ms_obj);
-MP_DECLARE_CONST_FUN_OBJ_0(mp_utime64_ticks_us_obj);
-MP_DECLARE_CONST_FUN_OBJ_0(mp_utime64_ticks_cpu_obj);
-MP_DECLARE_CONST_FUN_OBJ_2(mp_utime64_ticks_diff_obj);
-MP_DECLARE_CONST_FUN_OBJ_2(mp_utime64_ticks_add_obj);
-
-#endif // MICROPY_INCLUDED_EXTMOD_UTIME64_MPHAL_H
+MP_DECLARE_CONST_FUN_OBJ_0(mp_utime_ticks_cpu_obj);
+MP_DECLARE_CONST_FUN_OBJ_2(mp_utime_ticks_diff_obj);
+/*
+mp_obj_t time_localtime(size_t n_args, const mp_obj_t *args);
+mp_obj_t time_mktime(mp_obj_t tuple);
+mp_obj_t time_time(void);
+*/
