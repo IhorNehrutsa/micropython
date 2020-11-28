@@ -326,6 +326,7 @@ SRC_C = \
 	fatfs_port.c \
 	help.c \
 	modutime.c \
+	modutime64.c \
 	moduos.c \
 	machine_timer.c \
 	machine_pin.c \
