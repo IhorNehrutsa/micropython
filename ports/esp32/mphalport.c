@@ -161,7 +161,7 @@ uint64_t mp_hal_ticks_us64(void) {
 }
 
 uint64_t mp_hal_ticks_cpu64(void) {
-    return mp_hal_ticks_cpu(); // uint32 to uint64
+    return mp_hal_ticks_cpu(); // uint32 as uint64
 }
 
 void mp_hal_delay_ms(uint32_t ms) {

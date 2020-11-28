@@ -118,7 +118,7 @@
 #define MICROPY_PY_SYS_STDIO_BUFFER         (1)
 #define MICROPY_PY_UERRNO                   (1)
 #define MICROPY_PY_USELECT                  (1)
-#define MICROPY_PY_UTIME_MP_HAL             (1)
+#define MICROPY_PY_UTIME_MP_HAL             (0)
 #define MICROPY_PY_UTIME64_MP_HAL           (1)
 #define MICROPY_PY_THREAD                   (1)
 #define MICROPY_PY_THREAD_GIL               (1)
@@ -193,11 +193,23 @@ extern const struct _mp_obj_module_t mp_module_machine;
 extern const struct _mp_obj_module_t mp_module_network;
 extern const struct _mp_obj_module_t mp_module_onewire;
 
+#if MICROPY_PY_UTIME_MP_HAL == 1
+  #define USE_UTIME() { MP_OBJ_NEW_QSTR(MP_QSTR_utime), (mp_obj_t)&utime_module },
+#else
+  #define USE_UTIME()
+#endif
+
+#if MICROPY_PY_UTIME64_MP_HAL == 1
+  #define USE_UTIME64() { MP_OBJ_NEW_QSTR(MP_QSTR_utime64), (mp_obj_t)&utime64_module },
+#else
+  #define USE_UTIME64()
+#endif
+
 #define MICROPY_PORT_BUILTIN_MODULES \
     { MP_OBJ_NEW_QSTR(MP_QSTR_esp), (mp_obj_t)&esp_module }, \
     { MP_OBJ_NEW_QSTR(MP_QSTR_esp32), (mp_obj_t)&esp32_module }, \
-    { MP_OBJ_NEW_QSTR(MP_QSTR_utime), (mp_obj_t)&utime_module }, \
-    { MP_OBJ_NEW_QSTR(MP_QSTR_utime64), (mp_obj_t)&utime64_module }, \
+    USE_UTIME() \
+    USE_UTIME64() \
     { MP_OBJ_NEW_QSTR(MP_QSTR_uos), (mp_obj_t)&uos_module }, \
     { MP_OBJ_NEW_QSTR(MP_QSTR_usocket), (mp_obj_t)&mp_module_usocket }, \
     { MP_OBJ_NEW_QSTR(MP_QSTR_machine), (mp_obj_t)&mp_module_machine }, \

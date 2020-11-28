@@ -33,6 +33,8 @@
 
 #include "py/runtime.h"
 #include "lib/timeutils/timeutils.h"
+#include "modutime.h"
+#include "extmod/utime_mphal.h"
 #include "extmod/utime64_mphal.h"
 
 STATIC const mp_rom_map_elem_t utime64_module_globals_table[] = {
