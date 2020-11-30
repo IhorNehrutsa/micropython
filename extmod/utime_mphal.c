@@ -26,7 +26,7 @@
  */
 
 #include "py/mpconfig.h"
-#if MICROPY_PY_UTIME_MP_HAL
+#if MICROPY_PY_UTIME_MP_HAL || MICROPY_PY_UTIME64_MP_HAL
 
 #include <string.h>
 

@@ -1,9 +1,11 @@
 /*
  * This file is part of the MicroPython project, http://micropython.org/
  *
+ * Development of the code in this file was sponsored by Microbric Pty Ltd
+ *
  * The MIT License (MIT)
  *
- * Copyright (c) 2020 Jim Mussared
+ * Copyright (c) 2020 Ihor Nehrutsa
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -23,26 +25,11 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#ifndef MICROPY_INCLUDED_ESP32_MODUTIME_H
+#define MICROPY_INCLUDED_ESP32_MODUTIME_H
 
-#ifndef MICROPY_INCLUDED_EXTMOD_NIMBLE_HAL_HAL_UART_H
-#define MICROPY_INCLUDED_EXTMOD_NIMBLE_HAL_HAL_UART_H
+MP_DECLARE_CONST_FUN_OBJ_VAR_BETWEEN(time_localtime_obj);
+MP_DECLARE_CONST_FUN_OBJ_1(time_mktime_obj);
+MP_DECLARE_CONST_FUN_OBJ_0(time_time_obj);
 
-#include <stdint.h>
-
-#define SYSINIT_PANIC_ASSERT_MSG(cond, msg)
-
-#define HAL_UART_PARITY_NONE (0)
-
-typedef int (*hal_uart_tx_cb_t)(void *arg);
-typedef int (*hal_uart_rx_cb_t)(void *arg, uint8_t data);
-
-// --- Called by NimBLE, implemented in hal_uart.c. ---------------------------
-int hal_uart_init_cbs(uint32_t port, hal_uart_tx_cb_t tx_cb, void *tx_arg, hal_uart_rx_cb_t rx_cb, void *rx_arg);
-int hal_uart_config(uint32_t port, uint32_t baud, uint32_t bits, uint32_t stop, uint32_t parity, uint32_t flow);
-void hal_uart_start_tx(uint32_t port);
-int hal_uart_close(uint32_t port);
-
-// --- Called by the MicroPython port when UART data is available -------------
-void mp_bluetooth_nimble_hci_uart_process(bool run_events);
-
-#endif // MICROPY_INCLUDED_EXTMOD_NIMBLE_HAL_HAL_UART_H
+#endif

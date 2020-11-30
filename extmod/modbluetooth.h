@@ -43,11 +43,19 @@
 #define MICROPY_PY_BLUETOOTH_ENABLE_CENTRAL_MODE (0)
 #endif
 
-#ifndef MICROPY_PY_BLUETOOTH_GATTS_ON_READ_CALLBACK
-#define MICROPY_PY_BLUETOOTH_GATTS_ON_READ_CALLBACK (0)
+#ifndef MICROPY_PY_BLUETOOTH_USE_SYNC_EVENTS
+// This can be enabled if the BLE stack runs entirely in scheduler context
+// and therefore is able to call directly into the VM to run Python callbacks.
+#define MICROPY_PY_BLUETOOTH_USE_SYNC_EVENTS (0)
+#endif
+
+// A port can optionally enable support for L2CAP "Connection Oriented Channels".
+#ifndef MICROPY_PY_BLUETOOTH_ENABLE_L2CAP_CHANNELS
+#define MICROPY_PY_BLUETOOTH_ENABLE_L2CAP_CHANNELS (0)
 #endif
 
 // This is used to protect the ringbuffer.
+// A port may no-op this if MICROPY_PY_BLUETOOTH_USE_SYNC_EVENTS is enabled.
 #ifndef MICROPY_PY_BLUETOOTH_ENTER
 #define MICROPY_PY_BLUETOOTH_ENTER mp_uint_t atomic_state = MICROPY_BEGIN_ATOMIC_SECTION();
 #define MICROPY_PY_BLUETOOTH_EXIT MICROPY_END_ATOMIC_SECTION(atomic_state);
@@ -101,6 +109,11 @@
 #define MP_BLUETOOTH_IRQ_GATTC_INDICATE                 (19)
 #define MP_BLUETOOTH_IRQ_GATTS_INDICATE_DONE            (20)
 #define MP_BLUETOOTH_IRQ_MTU_EXCHANGED                  (21)
+#define MP_BLUETOOTH_IRQ_L2CAP_ACCEPT                   (22)
+#define MP_BLUETOOTH_IRQ_L2CAP_CONNECT                  (23)
+#define MP_BLUETOOTH_IRQ_L2CAP_DISCONNECT               (24)
+#define MP_BLUETOOTH_IRQ_L2CAP_RECV                     (25)
+#define MP_BLUETOOTH_IRQ_L2CAP_SEND_READY               (26)
 
 #define MP_BLUETOOTH_ADDRESS_MODE_PUBLIC (0)
 #define MP_BLUETOOTH_ADDRESS_MODE_RANDOM (1)
@@ -133,9 +146,14 @@ _IRQ_GATTC_NOTIFY = const(18)
 _IRQ_GATTC_INDICATE = const(19)
 _IRQ_GATTS_INDICATE_DONE = const(20)
 _IRQ_MTU_EXCHANGED = const(21)
+_IRQ_L2CAP_ACCEPT = const(22)
+_IRQ_L2CAP_CONNECT = const(23)
+_IRQ_L2CAP_DISCONNECT = const(24)
+_IRQ_L2CAP_RECV = const(25)
+_IRQ_L2CAP_SEND_READY = const(26)
 */
 
-// Common UUID type.
+// bluetooth.UUID type.
 // Ports are expected to map this to their own internal UUID types.
 // Internally the UUID data is little-endian, but the user should only
 // ever see this if they use the buffer protocol, e.g. in order to
@@ -146,6 +164,8 @@ typedef struct {
     uint8_t type;
     uint8_t data[16];
 } mp_obj_bluetooth_uuid_t;
+
+extern const mp_obj_type_t mp_type_bluetooth_uuid;
 
 //////////////////////////////////////////////////////////////
 // API implemented by ports (i.e. called from modbluetooth.c):
@@ -245,7 +265,15 @@ int mp_bluetooth_gattc_write(uint16_t conn_handle, uint16_t value_handle, const 
 
 // Initiate MTU exchange for a specific connection using the preferred MTU.
 int mp_bluetooth_gattc_exchange_mtu(uint16_t conn_handle);
-#endif
+#endif // MICROPY_PY_BLUETOOTH_ENABLE_CENTRAL_MODE
+
+#if MICROPY_PY_BLUETOOTH_ENABLE_L2CAP_CHANNELS
+int mp_bluetooth_l2cap_listen(uint16_t psm, uint16_t mtu);
+int mp_bluetooth_l2cap_connect(uint16_t conn_handle, uint16_t psm, uint16_t mtu);
+int mp_bluetooth_l2cap_disconnect(uint16_t conn_handle, uint16_t cid);
+int mp_bluetooth_l2cap_send(uint16_t conn_handle, uint16_t cid, const uint8_t *buf, size_t len, bool *stalled);
+int mp_bluetooth_l2cap_recvinto(uint16_t conn_handle, uint16_t cid, uint8_t *buf, size_t *len);
+#endif // MICROPY_PY_BLUETOOTH_ENABLE_L2CAP_CHANNELS
 
 /////////////////////////////////////////////////////////////////////////////
 // API implemented by modbluetooth (called by port-specific implementations):
@@ -259,10 +287,8 @@ void mp_bluetooth_gatts_on_write(uint16_t conn_handle, uint16_t value_handle);
 // Call this when an acknowledgment is received for an indication.
 void mp_bluetooth_gatts_on_indicate_complete(uint16_t conn_handle, uint16_t value_handle, uint8_t status);
 
-#if MICROPY_PY_BLUETOOTH_GATTS_ON_READ_CALLBACK
 // Call this when a characteristic is read from. Return false to deny the read.
 bool mp_bluetooth_gatts_on_read_request(uint16_t conn_handle, uint16_t value_handle);
-#endif
 
 // Call this when an MTU exchange completes.
 void mp_bluetooth_gatts_on_mtu_exchanged(uint16_t conn_handle, uint16_t value);
@@ -287,15 +313,19 @@ void mp_bluetooth_gattc_on_descriptor_result(uint16_t conn_handle, uint16_t hand
 void mp_bluetooth_gattc_on_discover_complete(uint8_t event, uint16_t conn_handle, uint16_t status);
 
 // Notify modbluetooth that a read has completed with data (or notify/indicate data available, use `event` to disambiguate).
-// Note: these functions are to be called in a group protected by MICROPY_PY_BLUETOOTH_ENTER/EXIT.
-// _start returns the number of bytes to submit to the calls to _chunk, followed by a call to _end.
-size_t mp_bluetooth_gattc_on_data_available_start(uint8_t event, uint16_t conn_handle, uint16_t value_handle, size_t data_len, mp_uint_t *atomic_state_out);
-void mp_bluetooth_gattc_on_data_available_chunk(const uint8_t *data, size_t data_len);
-void mp_bluetooth_gattc_on_data_available_end(mp_uint_t atomic_state);
+void mp_bluetooth_gattc_on_data_available(uint8_t event, uint16_t conn_handle, uint16_t value_handle, const uint8_t **data, uint16_t *data_len, size_t num);
 
 // Notify modbluetooth that a read or write operation has completed.
 void mp_bluetooth_gattc_on_read_write_status(uint8_t event, uint16_t conn_handle, uint16_t value_handle, uint16_t status);
-#endif
+#endif // MICROPY_PY_BLUETOOTH_ENABLE_CENTRAL_MODE
+
+#if MICROPY_PY_BLUETOOTH_ENABLE_L2CAP_CHANNELS
+mp_int_t mp_bluetooth_gattc_on_l2cap_accept(uint16_t conn_handle, uint16_t cid, uint16_t psm, uint16_t our_mtu, uint16_t peer_mtu);
+void mp_bluetooth_gattc_on_l2cap_connect(uint16_t conn_handle, uint16_t cid, uint16_t psm, uint16_t our_mtu, uint16_t peer_mtu);
+void mp_bluetooth_gattc_on_l2cap_disconnect(uint16_t conn_handle, uint16_t cid, uint16_t psm, uint16_t status);
+void mp_bluetooth_gattc_on_l2cap_send_ready(uint16_t conn_handle, uint16_t cid, uint8_t status);
+void mp_bluetooth_gattc_on_l2cap_recv(uint16_t conn_handle, uint16_t cid);
+#endif // MICROPY_PY_BLUETOOTH_ENABLE_L2CAP_CHANNELS
 
 // For stacks that don't manage attribute value data (currently all of them), helpers
 // to store this in a map, keyed by value handle.
