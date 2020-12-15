@@ -181,6 +181,11 @@ STATIC mp_obj_t machine_reset_cause(size_t n_args, const mp_obj_t *pos_args, mp_
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_KW(machine_reset_cause_obj, 0,  machine_reset_cause);
 
+STATIC mp_obj_t machine_esp_reset_reason(void) {
+    return MP_OBJ_NEW_SMALL_INT(esp_reset_reason());
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(esp_reset_reason_obj, machine_esp_reset_reason);
+
 STATIC mp_obj_t machine_wake_reason(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     return MP_OBJ_NEW_SMALL_INT(esp_sleep_get_wakeup_cause());
 }
@@ -268,6 +273,7 @@ STATIC const mp_rom_map_elem_t machine_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_UART), MP_ROM_PTR(&machine_uart_type) },
 
     // Reset reasons
+    { MP_ROM_QSTR(MP_QSTR_reset_reason), MP_ROM_PTR(&esp_reset_reason_obj) },
     { MP_ROM_QSTR(MP_QSTR_reset_cause), MP_ROM_PTR(&machine_reset_cause_obj) },
     { MP_ROM_QSTR(MP_QSTR_HARD_RESET), MP_ROM_INT(MP_HARD_RESET) },
     { MP_ROM_QSTR(MP_QSTR_PWRON_RESET), MP_ROM_INT(MP_PWRON_RESET) },

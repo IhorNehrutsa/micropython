@@ -122,7 +122,7 @@
 #define MICROPY_PY_SYS_STDIO_BUFFER         (1)
 #define MICROPY_PY_UERRNO                   (1)
 #define MICROPY_PY_USELECT                  (1)
-#define MICROPY_PY_UTIME_MP_HAL             (1)
+#define MICROPY_PY_UTIME_MP_HAL             (0)
 #define MICROPY_PY_UTIME64_MP_HAL           (1)
 #define MICROPY_PY_THREAD                   (1)
 #define MICROPY_PY_THREAD_GIL               (1)
@@ -207,7 +207,11 @@ extern const struct _mp_obj_module_t pcnt_cmodule;
 #endif
 
 #if MICROPY_PY_UTIME64_MP_HAL == 1
-  #define USE_UTIME64() { MP_OBJ_NEW_QSTR(MP_QSTR_utime64), (mp_obj_t)&utime64_module },
+  #if MICROPY_PY_UTIME_MP_HAL == 1
+    #define USE_UTIME64() { MP_OBJ_NEW_QSTR(MP_QSTR_utime64), (mp_obj_t)&utime64_module },
+  #else
+    #define USE_UTIME64() { MP_OBJ_NEW_QSTR(MP_QSTR_utime), (mp_obj_t)&utime64_module },
+  #endif
 #else
   #define USE_UTIME64()
 #endif
