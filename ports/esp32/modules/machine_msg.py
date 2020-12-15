@@ -1,4 +1,4 @@
-from machine import reset_cause, PWRON_RESET, HARD_RESET, WDT_RESET, DEEPSLEEP_RESET, SOFT_RESET
+from machine import reset_cause, PWRON_RESET, HARD_RESET, WDT_RESET, DEEPSLEEP_RESET, SOFT_RESET, BROWNOUT_RESET
 
 machine_reset_cause = {
     PWRON_RESET: "PWRON_RESET",
@@ -6,6 +6,7 @@ machine_reset_cause = {
     WDT_RESET: "WDT_RESET",
     DEEPSLEEP_RESET: "DEEPSLEEP_RESET",
     SOFT_RESET: "SOFT_RESET",
+    BROWNOUT_RESET: "BROWNOUT_RESET",
     }
 
 
