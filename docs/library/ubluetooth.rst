@@ -8,7 +8,7 @@ This module provides an interface to a Bluetooth controller on a board.
 Currently this supports Bluetooth Low Energy (BLE) in Central, Peripheral,
 Broadcaster, and Observer roles, as well as GATT Server and Client and L2CAP
 connection-oriented-channels. A device may operate in multiple roles
-concurrently.
+concurrently. Pairing (and bonding) is supported on some ports.
 
 This API is intended to match the low-level Bluetooth protocol and provide
 building-blocks for higher-level abstractions such as specific device types.
@@ -80,6 +80,25 @@ Configuration
       :meth:`gattc_exchange_mtu<BLE.gattc_exchange_mtu>`.
       Use the ``_IRQ_MTU_EXCHANGED`` event to discover the MTU for a given connection.
 
+    - ``'bond'``: Sets whether bonding will be enabled during pairing. When
+      enabled, pairing requests will set the "bond" flag and the keys will be stored
+      by both devices.
+
+    - ``'mitm'``: Sets whether MITM-protection is required for pairing.
+
+    - ``'io'``: Sets the I/O capabilities of this device.
+
+      Available options are::
+
+        _IO_CAPABILITY_DISPLAY_ONLY = const(0)
+        _IO_CAPABILITY_DISPLAY_YESNO = const(1)
+        _IO_CAPABILITY_KEYBOARD_ONLY = const(2)
+        _IO_CAPABILITY_NO_INPUT_OUTPUT = const(3)
+        _IO_CAPABILITY_KEYBOARD_DISPLAY = const(4)
+
+    - ``'le_secure'``: Sets whether "LE Secure" pairing is required. Default is
+      false (i.e. allow "Legacy Pairing").
+
 Event Handling
 --------------
 
@@ -119,9 +138,9 @@ Event Handling
                 # A client has written to this characteristic or descriptor.
                 conn_handle, attr_handle = data
             elif event == _IRQ_GATTS_READ_REQUEST:
-                # A client has issued a read. Note: this is a hard IRQ.
-                # Return None to deny the read.
-                # Note: This event is not supported on ESP32.
+                # A client has issued a read. Note: this is only supported on STM32.
+                # Return a non-zero integer to deny the read (see below), or zero (or None)
+                # to accept the read.
                 conn_handle, attr_handle = data
             elif event == _IRQ_SCAN_RESULT:
                 # A single scan result.
@@ -199,6 +218,29 @@ Event Handling
                 # A previous l2cap_send that returned False has now completed and the channel is ready to send again.
                 # If status is non-zero, then the transmit buffer overflowed and the application should re-send the data.
                 conn_handle, cid, status = data
+            elif event == _IRQ_CONNECTION_UPDATE:
+                # The remote device has updated connection parameters.
+                conn_handle, conn_interval, conn_latency, supervision_timeout, status = data
+            elif event == _IRQ_ENCRYPTION_UPDATE:
+                # The encryption state has changed (likely as a result of pairing or bonding).
+                conn_handle, encrypted, authenticated, bonded, key_size = data
+            elif event == _IRQ_GET_SECRET:
+                # Return a stored secret.
+                # If key is None, return the index'th value of this sec_type.
+                # Otherwise return the corresponding value for this sec_type and key.
+                sec_type, index, key = data
+                return value
+            elif event == _IRQ_SET_SECRET:
+                # Save a secret to the store for this sec_type and key.
+                sec_type, key, value = data
+                return True
+            elif event == _IRQ_PASSKEY_ACTION:
+                # Respond to a passkey request during pairing.
+                # See gap_passkey() for details.
+                # action will be an action that is compatible with the configured "io" config.
+                # passkey will be non-zero if action is "numeric comparison".
+                conn_handle, action, passkey = data
+
 
 The event codes are::
 
@@ -229,6 +271,26 @@ The event codes are::
     _IRQ_L2CAP_DISCONNECT = const(24)
     _IRQ_L2CAP_RECV = const(25)
     _IRQ_L2CAP_SEND_READY = const(26)
+    _IRQ_CONNECTION_UPDATE = const(27)
+    _IRQ_ENCRYPTION_UPDATE = const(28)
+    _IRQ_GET_SECRET = const(29)
+    _IRQ_SET_SECRET = const(30)
+
+For the ``_IRQ_GATTS_READ_REQUEST`` event, the available return codes are::
+
+    _GATTS_NO_ERROR = const(0x00)
+    _GATTS_ERROR_READ_NOT_PERMITTED = const(0x02)
+    _GATTS_ERROR_WRITE_NOT_PERMITTED = const(0x03)
+    _GATTS_ERROR_INSUFFICIENT_AUTHENTICATION = const(0x05)
+    _GATTS_ERROR_INSUFFICIENT_AUTHORIZATION = const(0x08)
+    _GATTS_ERROR_INSUFFICIENT_ENCRYPTION = const(0x0f)
+
+For the ``_IRQ_PASSKEY_ACTION`` event, the available actions are::
+
+    _PASSKEY_ACTION_NONE = const(0)
+    _PASSKEY_ACTION_INPUT = const(2)
+    _PASSKEY_ACTION_DISPLAY = const(3)
+    _PASSKEY_ACTION_NUMERIC_COMPARISON = const(4)
 
 In order to save space in the firmware, these constants are not included on the
 :mod:`ubluetooth` module. Add the ones that you need from the list above to your
@@ -371,9 +433,9 @@ writes from a client to a given characteristic, use
     Each **descriptor** is a two-element tuple containing a UUID and a **flags**
     value.
 
-    The **flags** are a bitwise-OR combination of the
-    :data:`ubluetooth.FLAG_READ`, :data:`ubluetooth.FLAG_WRITE` and
-    :data:`ubluetooth.FLAG_NOTIFY` values defined below.
+    The **flags** are a bitwise-OR combination of the flags defined below. These
+    set both the behaviour of the characteristic (or descriptor) as well as the
+    security and privacy requirements.
 
     The return value is a list (one element per service) of tuples (each element
     is a value handle). Characteristics and descriptor handles are flattened
@@ -396,6 +458,27 @@ writes from a client to a given characteristic, use
     :meth:`gatts_indicate <BLE.gatts_indicate>`.
 
     **Note:** Advertising must be stopped before registering services.
+
+    Available flags for characteristics and descriptors are::
+
+        from micropython import const
+        _FLAG_BROADCAST = const(0x0001)
+        _FLAG_READ = const(0x0002)
+        _FLAG_WRITE_NO_RESPONSE = const(0x0004)
+        _FLAG_WRITE = const(0x0008)
+        _FLAG_NOTIFY = const(0x0010)
+        _FLAG_INDICATE = const(0x0020)
+        _FLAG_AUTHENTICATED_SIGNED_WRITE = const(0x0040)
+
+        _FLAG_AUX_WRITE = const(0x0100)
+        _FLAG_READ_ENCRYPTED = const(0x0200)
+        _FLAG_READ_AUTHENTICATED = const(0x0400)
+        _FLAG_READ_AUTHORIZED = const(0x0800)
+        _FLAG_WRITE_ENCRYPTED = const(0x1000)
+        _FLAG_WRITE_AUTHENTICATED = const(0x2000)
+        _FLAG_WRITE_AUTHORIZED = const(0x4000)
+
+    As for the IRQs above, any required constants should be added to your Python code.
 
 .. method:: BLE.gatts_read(value_handle, /)
 
@@ -599,6 +682,47 @@ L2CAP connection-oriented-channels
     more channel credits and will be unable to send any more data.
 
 
+Pairing and bonding
+-------------------
+
+    Pairing allows a connection to be encrypted and authenticated via exchange
+    of secrets (with optional MITM protection via passkey authentication).
+
+    Bonding is the process of storing those secrets into non-volatile storage.
+    When bonded, a device is able to resolve a resolvable private address (RPA)
+    from another device based on the stored identity resolving key (IRK).
+    To support bonding, an application must implement the ``_IRQ_GET_SECRET``
+    and ``_IRQ_SET_SECRET`` events.
+
+    **Note:** This is currently only supported when using the NimBLE stack on
+    STM32 and Unix (not ESP32).
+
+.. method:: BLE.gap_pair(conn_handle, /)
+
+    Initiate pairing with the remote device.
+
+    Before calling this, ensure that the ``io``, ``mitm``, ``le_secure``, and
+    ``bond`` configuration options are set (via :meth:`config<BLE.config>`).
+
+    On successful pairing, the ``_IRQ_ENCRYPTION_UPDATE`` event will be raised.
+
+.. method:: BLE.gap_passkey(conn_handle, action, passkey, /)
+
+    Respond to a ``_IRQ_PASSKEY_ACTION`` event for the specified *conn_handle*
+    and *action*.
+
+    The *passkey* is a numeric value and will depend on on the
+    *action* (which will depend on what I/O capability has been set):
+
+        * When the *action* is ``_PASSKEY_ACTION_INPUT``, then the application should
+          prompt the user to enter the passkey that is shown on the remote device.
+        * When the *action* is ``_PASSKEY_ACTION_DISPLAY``, then the application should
+          generate a random 6-digit passkey and show it to the user.
+        * When the *action* is ``_PASSKEY_ACTION_NUMERIC_COMPARISON``, then the application
+          should show the passkey that was provided in the ``_IRQ_PASSKEY_ACTION`` event
+          and then respond with either ``0`` (cancel pairing), or ``1`` (accept pairing).
+
+
 class UUID
 ----------
 
@@ -614,11 +738,3 @@ Constructor
 
     - A 16-bit integer. e.g. ``0x2908``.
     - A 128-bit UUID string. e.g. ``'6E400001-B5A3-F393-E0A9-E50E24DCCA9E'``.
-
-
-Constants
----------
-
-.. data:: ubluetooth.FLAG_READ
-          ubluetooth.FLAG_WRITE
-          ubluetooth.FLAG_NOTIFY
