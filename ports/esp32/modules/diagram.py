@@ -16,6 +16,10 @@ indexes:max_ diff             |   |        min_diff
 '''
 
 
+def sign(x):
+    return 1 if x > 0 else -1 if x < 0 else 0
+
+
 class Diagram():
     def __init__(self):
         self.NoData()
@@ -101,9 +105,6 @@ class Diagram():
             self.diff.append(v1_v)
             self.gradient.append(sign(v1_v))
 
-#         ma = max(self.diff)
-#         mi = min(self.diff)
-
         self.diff.insert(0, +0.5)  # Для случая, если на графике идет только снижение сигнала (гладко понижающийся график),
         self.gradient.insert(0, 1)  # то увеличение задаем вручную в самом начале
 
@@ -156,93 +157,23 @@ class Diagram():
             try:
                 self.index_left_max = self.value.index(self.max_value, self.index_max_diff, self.index_min_diff)
                 ok = True
-            except:
+            except ValueError:
                 pass
         elif self.index_max_diff == self.index_min_diff:
             try:
                 self.index_left_max = self.value.index(self.max_value, self.index_max_diff, self.index_min_diff + 1)
                 ok = True
-            except:
+            except ValueError:
                 pass
         if ok:
-            print("Пик внутри плато")
+            print("Пик внутри плато - The peak inside the plateau")
             self.index_right_max = self.index_left_max
             while (self.index_right_max < len(self.value) - 1) and (self.value[self.index_right_max + 1] == self.max_value):
                 self.index_right_max += 1
         else:
             self.index_max_diff = None
             self.index_min_diff = None
-            print("Берем средний пик")
+            print("Средний пик - Average peak")
             l = len(self.peak_index)
             i = l // 2 + l % 2 - 1
             self.index_left_max, self.index_right_max = self.peak_index[i]
-
-
-#         try:
-#
-#         except ValueError as e:
-#             print(e)
-#             try:
-#                 self.index_left_max = self.value.index(self.max_value, self.index_max_diff)
-#                 print("2 справа от плато")
-#             except ValueError as e:
-#                 print(e)
-#                 try:
-#                     self.index_left_max = self.value.index(self.max_value, 0, self.index_min_diff)
-#                     print("3 слева от плато")
-#                 except ValueError as e:
-#                     print(e)
-#                     self.index_left_max = self.value.index(self.max_value)
-#                     print("4 неопределено")
-#         self.index_right_max = self.index_left_max
-#         while (self.index_right_max < len(self.value) - 1) and (self.value[self.index_right_max + 1] == self.max_value):
-#             self.index_right_max += 1
-#         print("diagram: max_value, index_left_max, index_right_max, count_max_value_peaks", self.max_value, self.index_left_max, self.index_right_max, self.count_max_value_peaks)
-
-
-def sign(x):
-    return 1 if x > 0 else -1 if x < 0 else 0
-
-
-# ===============================================================================
-if __name__ == "__main__":
-    #x = [1,1,1,5,5,5,5,10,10,11,11,10,10,5,5,5,5,5,5,5,1,1,1,1,1,1]
-    #x = [1,1,1,5,5,5,5,10,10,11,12,11,10,10,5,5,5,5,5,5,5,1,1,1,1,1,1]
-    x = [9, 8, 7, 6, 5, 4, 3, 2, 1, 1, 1, 1, 5, 5, 5, 5, 9, 9, 10, 9, 9, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 20]
-    #x = [1, 1, 1, 5, 5, 5, 5, 9, 10]
-    #x = [10, 9, 9, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 1, 1, 1]
-    #     x = [1,1,1,1, 5,5,5,5]
-    #     x = [5, 1,1,1,1]
-
-    #x = [1, 2, 3]
-    #x = [3, 2, 1]
-
-    #x = [-3, -3, -2, -2]  # рост
-    #x = [-2, -2, -3, -3]  # падение
-
-    d = Diagram()
-    for val in x:
-        d.append(val)
-    print(d.value)
-
-    d.remove_same_value()
-    print(d.value)
-
-    d.calc_diff_gradient()
-    print(d.diff)
-    print(d.gradient)
-
-    d.calc_indexes()
-
-    print("d.len()", d.len())
-    print("d.count_max_value_peaks, peak_index", d.count_max_value_peaks, d.peak_index)
-
-    print("d.index_max_diff, d.index_min_diff", d.index_max_diff, d.index_min_diff)
-    if d.index_max_diff is None:
-        print("[]")
-    else:
-        print(d.value[d.index_max_diff:d.index_min_diff + 1])
-
-    #print("d.avg_value, d.max_value", d.avg_value, d.max_value)
-    print("d.index_left_max, d.index_right_max", d.index_left_max, d.index_right_max)
-    print(d.value[d.index_left_max:d.index_right_max + 1])

@@ -1,6 +1,11 @@
+from gc import collect
+collect()
 from micropython import const
+collect()
 from ustruct import unpack
+collect()
 from utime import sleep_us, sleep_ms
+collect()
 
 # Author David Stenwall Wahlund (david at dafnet.se)
 
@@ -96,7 +101,7 @@ class BMP280:
         assert isinstance(i2c_bus, I2C)
 
         if (spi_bus is None) and (i2c_bus is None):
-            raise
+            raise BaseException
         self._bmp_spi = spi_bus
         self._bmp_i2c = i2c_bus
         self._i2c_addr = addr
@@ -159,12 +164,12 @@ class BMP280:
         self._bmp_spi.deselect()
         return buf_rd[1:]
 
-        self._bmp_spi.select()
-        self._bmp_spi.spi.write(addr.to_bytes(1, 'big'))
-        res = self._bmp_spi.spi.read(size)
-        self._bmp_spi.deselect()
-        print("res", len(res), res)
-        return res
+        #self._bmp_spi.select()
+        #self._bmp_spi.spi.write(addr.to_bytes(1, 'big'))
+        #res = self._bmp_spi.spi.read(size)
+        #self._bmp_spi.deselect()
+        #print("res", len(res), res)
+        #return res
 
     def _write(self, addr, b_arr):
         if not type(b_arr) is bytearray:
@@ -368,67 +373,3 @@ class BMP280:
         assert 0 <= oss <= 4
         t_os, p_os, self.read_wait_ms = _BMP280_OS_MATRIX[oss]
         self._write_bits(_BMP280_REGISTER_CTRL_MEAS, p_os + (t_os << 3), 2)
-
-
-# ===============================================================================
-if __name__ == "__main__":
-    try:
-        from esp32_ import *
-        from machine import I2C, SPI, Pin
-        from spi_bus import SPI_BUS
-        #from bmp280 import * # BMP280
-        from utime import sleep
-
-        if 1:
-            bus = I2C(I2C0_ID, scl=Pin(I2C0_scl), sda=Pin(I2C0_sda), freq=1250000)  # (freq = up to 3.4 MHz)
-            bmp = BMP280(i2c_bus=bus)
-        else:  # or
-            bus = SPI_BUS(SS=27, SPI_ID=HSPI_ID, sck=HSPI_sck, mosi=HSPI_mosi, miso=HSPI_miso, baudrate=1000000, polarity=1, phase=1, bits=8, firstbit=SPI.MSB)  # _baudrate=10000000=10MHz
-            bmp = BMP280(spi_bus=bus)
-
-        bmp.use_case(BMP280_CASE_WEATHER)
-        bmp.oversample(BMP280_OS_HIGH)
-
-        bmp.temp_os = BMP280_TEMP_OS_8
-        bmp.press_os = BMP280_PRES_OS_4
-
-        bmp.standby = BMP280_STANDBY_250
-        bmp.iir = BMP280_IIR_FILTER_2
-
-        bmp.spi3w = BMP280_SPI3W_ON
-
-        bmp.power_mode = BMP280_POWER_FORCED
-        # or
-        bmp.force_measure()
-
-        bmp.power_mode = BMP280_POWER_SLEEP
-        # or
-        bmp.sleep()
-
-        bmp.power_mode = BMP280_POWER_NORMAL
-        # or
-        bmp.normal_measure()
-        # also
-        bmp.in_normal_mode
-
-        print(bmp.temperature)
-        print(bmp.pressure)
-
-        #True while measuring
-        print("bmp.is_measuring", bmp.is_measuring)
-
-        #True while copying data to registers
-        print("bmp.is_updating", bmp.is_updating)
-
-        bmp.normal_measure()
-
-        i = 2
-        while i:
-            print(bmp.temperature)
-            sleep(0.25)
-            i -= 1
-    finally:
-        try:
-            bmp.__del__()
-        except:
-            pass
