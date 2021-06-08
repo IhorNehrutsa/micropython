@@ -1,26 +1,45 @@
 # CMake fragment for MicroPython rules
 
-set(MPY_PY_QSTRDEFS "${MPY_PY_DIR}/qstrdefs.h")
-set(MPY_GENHDR_DIR "${CMAKE_BINARY_DIR}/genhdr")
-set(MPY_MPVERSION "${MPY_GENHDR_DIR}/mpversion.h")
-set(MPY_MODULEDEFS "${MPY_GENHDR_DIR}/moduledefs.h")
-set(MPY_QSTR_DEFS_LAST "${MPY_GENHDR_DIR}/qstr.i.last")
-set(MPY_QSTR_DEFS_SPLIT "${MPY_GENHDR_DIR}/qstr.split")
-set(MPY_QSTR_DEFS_COLLECTED "${MPY_GENHDR_DIR}/qstrdefs.collected.h")
-set(MPY_QSTR_DEFS_PREPROCESSED "${MPY_GENHDR_DIR}/qstrdefs.preprocessed.h")
-set(MPY_QSTR_DEFS_GENERATED "${MPY_GENHDR_DIR}/qstrdefs.generated.h")
-set(MPY_FROZEN_CONTENT "${CMAKE_BINARY_DIR}/frozen_content.c")
+set(MICROPY_GENHDR_DIR "${CMAKE_BINARY_DIR}/genhdr")
+set(MICROPY_MPVERSION "${MICROPY_GENHDR_DIR}/mpversion.h")
+set(MICROPY_MODULEDEFS "${MICROPY_GENHDR_DIR}/moduledefs.h")
+set(MICROPY_QSTRDEFS_PY "${MICROPY_PY_DIR}/qstrdefs.h")
+set(MICROPY_QSTRDEFS_LAST "${MICROPY_GENHDR_DIR}/qstr.i.last")
+set(MICROPY_QSTRDEFS_SPLIT "${MICROPY_GENHDR_DIR}/qstr.split")
+set(MICROPY_QSTRDEFS_COLLECTED "${MICROPY_GENHDR_DIR}/qstrdefs.collected.h")
+set(MICROPY_QSTRDEFS_PREPROCESSED "${MICROPY_GENHDR_DIR}/qstrdefs.preprocessed.h")
+set(MICROPY_QSTRDEFS_GENERATED "${MICROPY_GENHDR_DIR}/qstrdefs.generated.h")
 
-target_sources(${MICROPYTHON_TARGET} PRIVATE
-    ${MPY_MPVERSION}
-    ${MPY_QSTR_DEFS_GENERATED}
-    ${MPY_FROZEN_CONTENT}
+# Provide defaults for preprocessor flags if not already defined
+if(NOT MICROPY_CPP_FLAGS)
+    get_target_property(MICROPY_CPP_INC ${MICROPY_TARGET} INCLUDE_DIRECTORIES)
+    get_target_property(MICROPY_CPP_DEF ${MICROPY_TARGET} COMPILE_DEFINITIONS)
+endif()
+
+# Compute MICROPY_CPP_FLAGS for preprocessor
+list(APPEND MICROPY_CPP_INC ${MICROPY_CPP_INC_EXTRA})
+list(APPEND MICROPY_CPP_DEF ${MICROPY_CPP_DEF_EXTRA})
+set(_prefix "-I")
+foreach(_arg ${MICROPY_CPP_INC})
+    list(APPEND MICROPY_CPP_FLAGS ${_prefix}${_arg})
+endforeach()
+set(_prefix "-D")
+foreach(_arg ${MICROPY_CPP_DEF})
+    list(APPEND MICROPY_CPP_FLAGS ${_prefix}${_arg})
+endforeach()
+list(APPEND MICROPY_CPP_FLAGS ${MICROPY_CPP_FLAGS_EXTRA})
+
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+target_sources(${MICROPY_TARGET} PRIVATE
+    ${MICROPY_MPVERSION}
+    ${MICROPY_QSTRDEFS_GENERATED}
 )
 
 # Command to force the build of another command
 
 add_custom_command(
-    OUTPUT FORCE_BUILD
+    OUTPUT MICROPY_FORCE_BUILD
     COMMENT ""
     COMMAND echo -n
 )
@@ -28,75 +47,93 @@ add_custom_command(
 # Generate mpversion.h
 
 add_custom_command(
-    OUTPUT ${MPY_MPVERSION}
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${MPY_GENHDR_DIR}
-    COMMAND python3 ${MPY_DIR}/py/makeversionhdr.py ${MPY_MPVERSION}
-    DEPENDS FORCE_BUILD
+    OUTPUT ${MICROPY_MPVERSION}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${MICROPY_GENHDR_DIR}
+    COMMAND ${Python3_EXECUTABLE} ${MICROPY_DIR}/py/makeversionhdr.py ${MICROPY_MPVERSION}
+    DEPENDS MICROPY_FORCE_BUILD
 )
 
 # Generate moduledefs.h
-# This is currently hard-coded to support modarray.c only, because makemoduledefs.py doesn't support absolute paths
 
 add_custom_command(
-    OUTPUT ${MPY_MODULEDEFS}
-    COMMAND python3 ${MPY_PY_DIR}/makemoduledefs.py --vpath="." ../../../py/modarray.c > ${MPY_MODULEDEFS}
-    DEPENDS ${MPY_MPVERSION}
-        ${SOURCE_QSTR}
+    OUTPUT ${MICROPY_MODULEDEFS}
+    COMMAND ${Python3_EXECUTABLE} ${MICROPY_PY_DIR}/makemoduledefs.py --vpath="/" ${MICROPY_SOURCE_QSTR} > ${MICROPY_MODULEDEFS}
+    DEPENDS ${MICROPY_MPVERSION}
+        ${MICROPY_SOURCE_QSTR}
 )
 
 # Generate qstrs
 
 # If any of the dependencies in this rule change then the C-preprocessor step must be run.
-# It only needs to be passed the list of SOURCE_QSTR files that have changed since it was
-# last run, but it looks like it's not possible to specify that with cmake.
+# It only needs to be passed the list of MICROPY_SOURCE_QSTR files that have changed since
+# it was last run, but it looks like it's not possible to specify that with cmake.
 add_custom_command(
-    OUTPUT ${MPY_QSTR_DEFS_LAST}
-    COMMAND ${CMAKE_C_COMPILER} -E \$\(C_INCLUDES\) \$\(C_FLAGS\) -DNO_QSTR ${SOURCE_QSTR} > ${MPY_GENHDR_DIR}/qstr.i.last
-    DEPENDS ${MPY_MODULEDEFS}
-        ${SOURCE_QSTR}
+    OUTPUT ${MICROPY_QSTRDEFS_LAST}
+    COMMAND ${Python3_EXECUTABLE} ${MICROPY_PY_DIR}/makeqstrdefs.py pp ${CMAKE_C_COMPILER} -E output ${MICROPY_GENHDR_DIR}/qstr.i.last cflags ${MICROPY_CPP_FLAGS} -DNO_QSTR cxxflags ${MICROPY_CPP_FLAGS} -DNO_QSTR sources ${MICROPY_SOURCE_QSTR}
+    DEPENDS ${MICROPY_MODULEDEFS}
+        ${MICROPY_SOURCE_QSTR}
     VERBATIM
-)
-
-add_custom_command(
-    OUTPUT ${MPY_QSTR_DEFS_SPLIT}
-    COMMAND python3 ${MPY_DIR}/py/makeqstrdefs.py split qstr ${MPY_GENHDR_DIR}/qstr.i.last ${MPY_GENHDR_DIR}/qstr _
-    COMMAND touch ${MPY_QSTR_DEFS_SPLIT}
-    DEPENDS ${MPY_QSTR_DEFS_LAST}
-    VERBATIM
+    COMMAND_EXPAND_LISTS
 )
 
 add_custom_command(
-    OUTPUT ${MPY_QSTR_DEFS_COLLECTED}
-    COMMAND python3 ${MPY_DIR}/py/makeqstrdefs.py cat qstr _ ${MPY_GENHDR_DIR}/qstr ${MPY_QSTR_DEFS_COLLECTED}
-    DEPENDS ${MPY_QSTR_DEFS_SPLIT}
+    OUTPUT ${MICROPY_QSTRDEFS_SPLIT}
+    COMMAND ${Python3_EXECUTABLE} ${MICROPY_PY_DIR}/makeqstrdefs.py split qstr ${MICROPY_GENHDR_DIR}/qstr.i.last ${MICROPY_GENHDR_DIR}/qstr _
+    COMMAND touch ${MICROPY_QSTRDEFS_SPLIT}
+    DEPENDS ${MICROPY_QSTRDEFS_LAST}
     VERBATIM
+    COMMAND_EXPAND_LISTS
 )
 
 add_custom_command(
-    OUTPUT ${MPY_QSTR_DEFS_PREPROCESSED}
-    COMMAND cat ${MPY_PY_QSTRDEFS} ${MPY_QSTR_DEFS_COLLECTED} | sed "s/^Q(.*)/\"&\"/" | ${CMAKE_C_COMPILER} -E \$\(C_INCLUDES\) \$\(C_FLAGS\) - | sed "s/^\\\"\\(Q(.*)\\)\\\"/\\1/" > ${MPY_QSTR_DEFS_PREPROCESSED}
-    DEPENDS ${MPY_QSTR_DEFS_COLLECTED}
+    OUTPUT ${MICROPY_QSTRDEFS_COLLECTED}
+    COMMAND ${Python3_EXECUTABLE} ${MICROPY_PY_DIR}/makeqstrdefs.py cat qstr _ ${MICROPY_GENHDR_DIR}/qstr ${MICROPY_QSTRDEFS_COLLECTED}
+    DEPENDS ${MICROPY_QSTRDEFS_SPLIT}
     VERBATIM
+    COMMAND_EXPAND_LISTS
 )
 
 add_custom_command(
-    OUTPUT ${MPY_QSTR_DEFS_GENERATED}
-    COMMAND python3 ${MPY_PY_DIR}/makeqstrdata.py ${MPY_QSTR_DEFS_PREPROCESSED} > ${MPY_QSTR_DEFS_GENERATED}
-    DEPENDS ${MPY_QSTR_DEFS_PREPROCESSED}
+    OUTPUT ${MICROPY_QSTRDEFS_PREPROCESSED}
+    COMMAND cat ${MICROPY_QSTRDEFS_PY} ${MICROPY_QSTRDEFS_PORT} ${MICROPY_QSTRDEFS_COLLECTED} | sed "s/^Q(.*)/\"&\"/" | ${CMAKE_C_COMPILER} -E ${MICROPY_CPP_FLAGS} - | sed "s/^\\\"\\(Q(.*)\\)\\\"/\\1/" > ${MICROPY_QSTRDEFS_PREPROCESSED}
+    DEPENDS ${MICROPY_QSTRDEFS_PY}
+        ${MICROPY_QSTRDEFS_PORT}
+        ${MICROPY_QSTRDEFS_COLLECTED}
     VERBATIM
-)
-
-# Build frozen code
-
-target_compile_options(${MICROPYTHON_TARGET} PUBLIC
-    -DMICROPY_QSTR_EXTRA_POOL=mp_qstr_frozen_const_pool
-    -DMICROPY_MODULE_FROZEN_MPY=\(1\)
+    COMMAND_EXPAND_LISTS
 )
 
 add_custom_command(
-    OUTPUT ${MPY_FROZEN_CONTENT}
-    COMMAND python3 ${MPY_DIR}/tools/makemanifest.py -o ${MPY_FROZEN_CONTENT} -v "MPY_DIR=${MPY_DIR}" -v "PORT_DIR=${MPY_PORT_DIR}" -b "${CMAKE_BINARY_DIR}" -f${MPY_CROSS_FLAGS} ${FROZEN_MANIFEST}
-    DEPENDS FORCE_BUILD
-        ${MPY_QSTR_DEFS_GENERATED}
+    OUTPUT ${MICROPY_QSTRDEFS_GENERATED}
+    COMMAND ${Python3_EXECUTABLE} ${MICROPY_PY_DIR}/makeqstrdata.py ${MICROPY_QSTRDEFS_PREPROCESSED} > ${MICROPY_QSTRDEFS_GENERATED}
+    DEPENDS ${MICROPY_QSTRDEFS_PREPROCESSED}
     VERBATIM
+    COMMAND_EXPAND_LISTS
 )
+
+# Build frozen code if enabled
+
+if(MICROPY_FROZEN_MANIFEST)
+    set(MICROPY_FROZEN_CONTENT "${CMAKE_BINARY_DIR}/frozen_content.c")
+
+    target_sources(${MICROPY_TARGET} PRIVATE
+        ${MICROPY_FROZEN_CONTENT}
+    )
+
+    target_compile_definitions(${MICROPY_TARGET} PUBLIC
+        MICROPY_QSTR_EXTRA_POOL=mp_qstr_frozen_const_pool
+        MICROPY_MODULE_FROZEN_MPY=\(1\)
+    )
+
+    if(NOT MICROPY_LIB_DIR)
+        set(MICROPY_LIB_DIR ${MICROPY_DIR}/../micropython-lib)
+    endif()
+
+    add_custom_command(
+        OUTPUT ${MICROPY_FROZEN_CONTENT}
+        COMMAND ${Python3_EXECUTABLE} ${MICROPY_DIR}/tools/makemanifest.py -o ${MICROPY_FROZEN_CONTENT} -v "MPY_DIR=${MICROPY_DIR}" -v "MPY_LIB_DIR=${MICROPY_LIB_DIR}" -v "PORT_DIR=${MICROPY_PORT_DIR}" -v "BOARD_DIR=${MICROPY_BOARD_DIR}" -b "${CMAKE_BINARY_DIR}" -f${MICROPY_CROSS_FLAGS} ${MICROPY_FROZEN_MANIFEST}
+        DEPENDS MICROPY_FORCE_BUILD
+            ${MICROPY_QSTRDEFS_GENERATED}
+        VERBATIM
+    )
+endif()
