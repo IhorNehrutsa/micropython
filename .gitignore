@@ -43,3 +43,7 @@ user.props
 ######################
 genrst/
 *.bak
+
+# MacOS desktop metadata files
+######################
+.DS_Store
