@@ -38,9 +38,10 @@ static char heap[16384];
 mp_obj_t execute_from_str(const char *str) {
     nlr_buf_t nlr;
     if (nlr_push(&nlr) == 0) {
-        mp_lexer_t *lex = mp_lexer_new_from_str_len(0/*MP_QSTR_*/, str, strlen(str), false);
+        qstr src_name = 1/*MP_QSTR_*/;
+        mp_lexer_t *lex = mp_lexer_new_from_str_len(src_name, str, strlen(str), false);
         mp_parse_tree_t pt = mp_parse(lex, MP_PARSE_FILE_INPUT);
-        mp_obj_t module_fun = mp_compile(&pt, lex->source_name, MP_EMIT_OPT_NONE, false);
+        mp_obj_t module_fun = mp_compile(&pt, src_name, false);
         mp_call_function_0(module_fun);
         nlr_pop();
         return 0;
@@ -52,7 +53,7 @@ mp_obj_t execute_from_str(const char *str) {
 
 int main() {
     // Initialized stack limit
-    mp_stack_set_limit(40000 * (BYTES_PER_WORD / 4));
+    mp_stack_set_limit(40000 * (sizeof(void *) / 4));
     // Initialize heap
     gc_init(heap, heap + sizeof(heap));
     // Initialize interpreter

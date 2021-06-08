@@ -3,11 +3,12 @@
 
 #define MICROPY_HW_HAS_SWITCH       (1)
 #define MICROPY_HW_HAS_FLASH        (1)
-#define MICROPY_HW_HAS_SDCARD       (1)
 #define MICROPY_HW_HAS_MMA7660      (1)
 #define MICROPY_HW_HAS_LCD          (1)
 #define MICROPY_HW_ENABLE_RTC       (1)
+#define MICROPY_HW_ENABLE_USB       (1)
 #define MICROPY_HW_ENABLE_SERVO     (1)
+#define MICROPY_HW_ENABLE_SDCARD    (1)
 
 // HSE is 12MHz
 #define MICROPY_HW_CLK_PLLM (12)
@@ -34,7 +35,7 @@
 #define MICROPY_HW_UART6_TX     (pin_C6)
 #define MICROPY_HW_UART6_RX     (pin_C7)
 
-// I2C busses
+// I2C buses
 #define MICROPY_HW_I2C1_NAME "X"
 #define MICROPY_HW_I2C1_SCL (pin_B6)
 #define MICROPY_HW_I2C1_SDA (pin_B7)
@@ -42,7 +43,7 @@
 #define MICROPY_HW_I2C3_SCL (pin_A8)
 #define MICROPY_HW_I2C3_SDA (pin_B8)
 
-// SPI busses
+// SPI buses
 #define MICROPY_HW_SPI1_NAME "X"
 #define MICROPY_HW_SPI1_NSS  (pin_A4) // X5
 #define MICROPY_HW_SPI1_SCK  (pin_A5) // X6
@@ -76,6 +77,7 @@
 #define MICROPY_HW_SDCARD_DETECT_PRESENT    (GPIO_PIN_RESET)
 
 // USB config
+#define MICROPY_HW_USB_FS              (1)
 #define MICROPY_HW_USB_VBUS_DETECT_PIN (pin_A9)
 
 // MMA accelerometer config

@@ -126,7 +126,7 @@ STATIC void esp32_pwm_init_helper(esp32_pwm_obj_t *self,
     }
     if (channel >= LEDC_CHANNEL_MAX) {
         if (avail == -1) {
-            mp_raise_ValueError("out of PWM channels");
+            mp_raise_ValueError(MP_ERROR_TEXT("out of PWM channels"));
         }
         channel = avail;
     }
@@ -152,15 +152,14 @@ STATIC void esp32_pwm_init_helper(esp32_pwm_obj_t *self,
         // configure channel
         ledc_channel_config_t cfg = {
             .channel = channel,
-            .duty = (1 << PWRES) / 2,
+            .duty = (1 << timer_cfg.duty_resolution) / 2,
             .gpio_num = self->pin,
             .intr_type = LEDC_INTR_DISABLE,
             .speed_mode = self->mode,
             .timer_sel = self->timer,
         };
         if (ledc_channel_config(&cfg) != ESP_OK) {
-            nlr_raise(mp_obj_new_exception_msg_varg(&mp_type_ValueError,
-                "PWM not supported on pin %d", self->pin));
+            mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("PWM not supported on pin %d"), self->pin);
         }
         chan_gpio[channel] = self->pin;
     }
@@ -187,7 +186,7 @@ STATIC void esp32_pwm_init_helper(esp32_pwm_obj_t *self,
 }
 
 STATIC mp_obj_t esp32_pwm_make_new(const mp_obj_type_t *type,
-        size_t n_args, size_t n_kw, const mp_obj_t *args) {
+    size_t n_args, size_t n_kw, const mp_obj_t *args) {
     mp_arg_check_num(n_args, n_kw, 1, MP_OBJ_FUN_ARGS_MAX, true);
     gpio_num_t pin_id = machine_pin_get_id(args[0]);
 
@@ -213,7 +212,7 @@ STATIC mp_obj_t esp32_pwm_make_new(const mp_obj_type_t *type,
 }
 
 STATIC mp_obj_t esp32_pwm_init(size_t n_args,
-        const mp_obj_t *args, mp_map_t *kw_args) {
+    const mp_obj_t *args, mp_map_t *kw_args) {
     esp32_pwm_init_helper(args[0], n_args - 1, args + 1, kw_args);
     return mp_const_none;
 }
@@ -304,5 +303,5 @@ const mp_obj_type_t machine_pwm_type = {
     .name = MP_QSTR_PWM,
     .print = esp32_pwm_print,
     .make_new = esp32_pwm_make_new,
-    .locals_dict = (mp_obj_dict_t*)&esp32_pwm_locals_dict,
+    .locals_dict = (mp_obj_dict_t *)&esp32_pwm_locals_dict,
 };

@@ -10,6 +10,7 @@
 #define MICROPY_HW_HAS_SWITCH       (1)
 #define MICROPY_HW_HAS_FLASH        (1)
 #define MICROPY_HW_ENABLE_RTC       (1)
+#define MICROPY_HW_ENABLE_USB       (1)
 #define MICROPY_HW_ENABLE_SERVO     (1)
 
 // Pico has an 8 MHz HSE and the F401 does 84 MHz max
@@ -31,7 +32,7 @@
 #define MICROPY_HW_UART6_TX     (pin_A11)
 #define MICROPY_HW_UART6_RX     (pin_A12)
 
-// I2C busses
+// I2C buses
 #define MICROPY_HW_I2C1_SCL (pin_B6)
 #define MICROPY_HW_I2C1_SDA (pin_B7)
 #define MICROPY_HW_I2C2_SCL (pin_B10)
@@ -39,7 +40,7 @@
 #define MICROPY_HW_I2C3_SCL (pin_A8)
 #define MICROPY_HW_I2C3_SDA (pin_B4)
 
-// SPI busses
+// SPI buses
 #define MICROPY_HW_SPI1_NSS  (pin_A4)
 #define MICROPY_HW_SPI1_SCK  (pin_A5)
 #define MICROPY_HW_SPI1_MISO (pin_A6)
@@ -62,3 +63,6 @@
 #define MICROPY_HW_LED4             (pin_B12) // green
 #define MICROPY_HW_LED_ON(pin)      (mp_hal_pin_high(pin))
 #define MICROPY_HW_LED_OFF(pin)     (mp_hal_pin_low(pin))
+
+// USB config
+#define MICROPY_HW_USB_FS (1)
