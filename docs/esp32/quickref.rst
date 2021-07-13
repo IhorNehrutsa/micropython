@@ -390,11 +390,16 @@ Any available output-capablepins can be used for TX, RX, BUS-OFF, and CLKOUT sig
 The driver is accessed via the :ref:`machine.CAN <machine.CAN>` class::
 
     from machine import CAN
-    BAUDRATE_500k = 500
-    can = CAN(0, extframe=True, mode=CAN.LOOPBACK, baudrate=BAUDRATE_500k)
-    dev.setfilter(0, CAN.FILTER_ADDRESS, [0x102, 0])  # set a filter to receive messages with id = 0x102
-    can.send([1,2,3], 0x102)   # send a message with id 123
-    can.recv()                 # receive message
+    can = CAN(0, tx=4, rx=16, extframe=True, mode=CAN.LOOPBACK, baudrate=500000)
+    can.setfilter(0, CAN.FILTER_ADDRESS, [0x102, 0])  # set a filter to receive messages with id = 0x102
+    can.send([1,2,3], 0x102)    # send a message with id 123
+    can.recv()                  # receive message
+    
+    can.any()                   # returns True if FIFO is not empty, else False
+    can.info()                  # get information about the controller’s error states and TX and RX buffers
+    can.deinit()                # turn off the can bus
+    can.clear_rx_queue()        # clear messages in the FIFO
+    can.clear_tx_queue()        # clear messages in the transmit buffer
  
 Real time clock (RTC)
 ---------------------
