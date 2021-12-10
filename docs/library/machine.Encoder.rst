@@ -61,6 +61,8 @@ Constructor
           - 2 - count the leading and trailing edges from one phase channel.
           - 4 - count both leading and trailing edges of both phase channels.
 
+        The *x124* argument is port specific feature (the mimxrt port uses x124=4 only).
+
       - *scale*\=value. Sets the scale value. The default value is 1. You may treat scale
         factor as **revolution per pulse**, **angle per pulse** etc.
         Hint: Set scale factor to 1/4 to balance the multiplier x124=4.
