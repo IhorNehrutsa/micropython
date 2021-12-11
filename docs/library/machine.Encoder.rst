@@ -43,6 +43,7 @@ Constructor
         :ref:`machine.Pin <machine.Pin>` objects, but a port may allow other values,
         like integers or strings, which designate a Pin in the *machine.Pin* class.
         They may be omitted on ports which have predefined pins for *id*-specified hardware block.
+        Keywords may be ommited, for example  Encoder(0, Pin(0), Pin(1)).
 
     Keyword arguments:
 
