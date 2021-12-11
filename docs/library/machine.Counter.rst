@@ -6,7 +6,7 @@ class Counter-- Pulse Counter
 
 This class provides a Pulse Counter service.
 
-Here is described a basics, commons for hadware-counters-based counters of MicroPython ports:
+Here is described a basics, commons for hardware-counters-based counters of MicroPython ports:
 
   * :ref:`ESP32.Counter <pcnt.Counter>`
   * mimxrt.Counter - under constructions
@@ -38,7 +38,7 @@ Constructor
         :ref:`machine.Pin <machine.Pin>` object, but a port may allow other values,
         like integers or strings, which designate a Pin in the *machine.Pin* class.
         It may be omitted on ports which have predefined pin for *id*-specified hardware block.
-        Keyword may be ommited, for example Counter(0, Pin(0)).
+        The keyword may be omitted, for example Counter(0, Pin(0)).
 
     Keyword arguments:
 

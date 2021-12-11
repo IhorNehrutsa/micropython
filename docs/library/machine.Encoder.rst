@@ -11,7 +11,7 @@ If your port does not support hardware encoder use `Quadrature incremental encod
 See also Pin-interrupt-based encoders (and problems) from Peter Hinch `Incremental encoders <https://github.com/peterhinch/micropython-samples/blob/master/encoders/ENCODERS.md>`_.
 There is also `Dave Hylands an STM specific hardware-Timer-based solution <https://github.com/dhylands/upy-examples/blob/master/encoder.py>`_.
 
-Here is described a basics, commons for hadware-counters-based encoders of MicroPython ports:
+Here is described a basics, commons for hardware-counters-based encoders of MicroPython ports:
 
     * :ref:`ESP32.Encoder <pcnt.Encoder>`
     * mimxrt.Encoder - under constructions
@@ -43,7 +43,7 @@ Constructor
         :ref:`machine.Pin <machine.Pin>` objects, but a port may allow other values,
         like integers or strings, which designate a Pin in the *machine.Pin* class.
         They may be omitted on ports which have predefined pins for *id*-specified hardware block.
-        Keywords may be ommited, for example  Encoder(0, Pin(0), Pin(1)).
+        The keywords may be omitted, for example Encoder(0, Pin(0), Pin(1)).
 
     Keyword arguments:
 
