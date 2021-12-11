@@ -27,14 +27,14 @@ Minimal example usage::
 Constructor
 -----------
 
-.. class:: Counter(id, input=machine.Pin, \*, keyword_arguments)
+.. class:: Counter(id, pulse=machine.Pin, \*, keyword_arguments)
 
     Construct and return a new Counter object using the following parameters:
 
       - *id*. Values of *id* depend on a particular port and its hardware.
         Values 0, 1, etc. are commonly used to select hardware block #0, #1, etc.
 
-      - *input*. The Counter pulses input pin, which is usually a
+      - *pulse*. The Counter pulses input pin, which is usually a
         :ref:`machine.Pin <machine.Pin>` object, but a port may allow other values,
         like integers or strings, which designate a Pin in the *machine.Pin* class.
         It may be omitted on ports that have a predefined pin for *id*-specified hardware block.
