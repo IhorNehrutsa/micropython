@@ -34,10 +34,11 @@ Constructor
       - *id*. Values of *id* depend on a particular port and its hardware.
         Values 0, 1, etc. are commonly used to select hardware block #0, #1, etc.
 
-      - *input*. The Counter input pin, which is usually a
+      - *input*. The Counter pulses input pin, which is usually a
         :ref:`machine.Pin <machine.Pin>` object, but a port may allow other values,
         like integers or strings, which designate a Pin in the *machine.Pin* class.
         It may be omitted on ports which have predefined pin for *id*-specified hardware block.
+        Keyword may be ommited, for example Counter(0, Pin(0)).
 
     Keyword arguments:
 
