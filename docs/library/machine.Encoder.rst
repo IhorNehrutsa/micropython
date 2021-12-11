@@ -4,7 +4,7 @@
 class Encoder -- Quadrature Incremental Encoder
 ===============================================
 
-This class provides an Quadrature Incremental Encoder service.
+This class provides a Quadrature Incremental Encoder service.
 Wiki info at `Incremental encoder <https://en.wikipedia.org/wiki/Incremental_encoder>`_.
 
 If your port does not support hardware encoder use `Quadrature incremental encoder based on machine.Pin interrupts <https://github.com/IhorNehrutsa/MicroPython-quadrature-incremental-encoder>`_.
@@ -42,14 +42,14 @@ Constructor
       - *phase_a* and *phase_b* are the Quadrature encoder inputs, which are usually
         :ref:`machine.Pin <machine.Pin>` objects, but a port may allow other values,
         like integers or strings, which designate a Pin in the *machine.Pin* class.
-        They may be omitted on ports which have predefined pins for *id*-specified hardware block.
-        The keywords may be omitted, for example Encoder(0, Pin(0), Pin(1)).
+        They may be omitted on ports that have predefined pins for *id*-specified hardware block.
+        The keywords may be omitted, for example, Encoder(0, Pin(0), Pin(1)).
 
     Keyword arguments:
 
-      - *filter_ns*\=value. Specifies a ns-value for the minimal time a signal has to be stable
-        at the pulse input to be recognized. The largest value is port specific and is the default.
-        If the specified value is greater than the largest value, then largest value is used.
+      - *filter_ns*\=value. Specifies an ns-value for the minimal time a signal has to be stable
+        at the pulse input to be recognized. The largest value is port-specific and is the default.
+        If the specified value is greater than the largest value, then - largest value is used.
         A value of 0 or negative sets the filter is switched off.
 
 Methods
@@ -66,10 +66,10 @@ Methods
 
 .. method:: Encoder.value([value])
 
-   Get (and optional set) the Encoder value as signed integer.
-   With no argument the actual Encoderr value are returned.
+   Get (and optional set) the Encoder value as a signed integer.
+   With no argument, the actual Encoder value is returned.
 
    With a single *value* argument the Encoder is set to that value.
 
-Simple check of Encoder performance
+A simple check of Encoder performance
 `encoders_test.py <https://github.com/IhorNehrutsa/MicroPython-quadrature-incremental-encoder/blob/main/encoders_test.py>`_

@@ -37,8 +37,8 @@ Constructor
       - *input*. The Counter pulses input pin, which is usually a
         :ref:`machine.Pin <machine.Pin>` object, but a port may allow other values,
         like integers or strings, which designate a Pin in the *machine.Pin* class.
-        It may be omitted on ports which have predefined pin for *id*-specified hardware block.
-        The keyword may be omitted, for example Counter(0, Pin(0)).
+        It may be omitted on ports that have a predefined pin for *id*-specified hardware block.
+        The keyword may be omitted, for example, Counter(0, Pin(0)).
 
     Keyword arguments:
 
@@ -52,9 +52,9 @@ Constructor
             - if Pin.value() == 0: count down -1
             - if Pin.value() == 1: count up +1
 
-      - *filter_ns*\=value. Specifies a ns-value for the minimal time a signal has to be stable
-        at the pulse input to be recognized. The largest value is port specific and is the default.
-        If the specified value is greater than the largest value, then largest value is used.
+      - *filter_ns*\=value. Specifies an ns-value for the minimal time a signal has to be stable
+        at the pulse input to be recognized. The largest value is port-specific and is the default.
+        If the specified value is greater than the largest value, then - largest value is used.
         A value of 0 or negative sets the filter is switched off.
 
 Methods
@@ -71,7 +71,7 @@ Methods
 
 .. method:: Counter.value([value])
 
-   Get (and optional set) the Counter value as signed integer.
-   With no argument the actual Counter value are returned.
+   Get (and optional set) the Counter value as a signed integer.
+   With no argument, the actual Counter value is returned.
 
    With a single *value* argument the Counter is set to that value.
