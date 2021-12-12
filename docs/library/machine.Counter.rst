@@ -4,32 +4,29 @@
 class Counter-- Pulse Counter
 =============================
 
-This class provides a Pulse Counter service.
+This class provides access to hardware-supported pulse counting.
 
-Here is described a basics, commons for hardware-counters-based counters of MicroPython ports:
+It is currently provided for ports:
 
-  * :ref:`ESP32.Counter <pcnt.Counter>`
-  * mimxrt.Counter - under constructions
-  * STM32.Counter - TODO
+  * :ref:`ESP32 <esp32_machine.Counter>`
+  * :ref:`MIMXRT <mimxrt_machine.Counter>`
 
 Minimal example usage::
 
     from machine import Pin, Counter
 
-    counter = Counter(0, Pin(0, mode=Pin.INPUT))  # create Counter object and start to count input pulses
-    counter.init(filter_ns=0)                     # switch filtering off
-    value = counter.value()                       # get current Counter value
-    value = counter.value(0)                      # get current Counter value, set counter to 0
-    counter.deinit()                              # turn off the Counter
+    counter = Counter(0, src=Pin(0, mode=Pin.INPUT))  # create Counter object and start to count input pulses
+    counter.init(filter_ns=1000)                      # switch source filtering on
+    value = counter.value()                           # get current Counter value
+    value = counter.value(0)                          # get current Counter value, set counter to 0
+    counter.deinit()                                  # turn off the Counter
 
-    print(counter)                                # show the Counter object properties
+    print(counter)                                    # show the Counter object properties
 
 Constructor
 -----------
 
 .. class:: Counter(id, src=machine.Pin, \*, keyword_arguments)
-
-    Construct and return a new Counter object using the following parameters:
 
       - *id*. Values of *id* depend on a particular port and its hardware.
         Values 0, 1, etc. are commonly used to select hardware block #0, #1, etc.
