@@ -13,16 +13,15 @@ There is also `Dave Hylands an STM specific hardware-Timer-based solution <https
 
 Here is described a basics, commons for hardware-counters-based encoders of MicroPython ports:
 
-    * :ref:`ESP32.Encoder <pcnt.Encoder>`
-    * mimxrt.Encoder - under constructions
-    * STM32.Encoder - TODO
+    * :ref:`ESP32 <esp32_machine.Encoder>`
+    * :ref:`MIMXRT <mimxrt_machine.Encoder>`
 
 Minimal example usage::
 
     from machine import Pin, Encoder
 
-    enc = Encoder(id, Pin(0), Pin(1))  # create Quadrature Encoder object and start to encode input pulses
-    enc.init(filter_ns=0)              # switch filtering off
+    enc = Encoder(id, phase_a=Pin(0), phase_b=Pin(1))  # create Quadrature Encoder object and start to encode input pulses
+    enc.init(filter_ns=1000)           # switch source filtering on
     value = enc.value()                # get current Encoder value
     value = enc.value(0)               # get current Encoder value, set Encoder to 0
     enc.deinit()                       # turn off the Encoder
@@ -33,8 +32,6 @@ Constructor
 -----------
 
 .. class:: Encoder(id, phase_a=machine.Pin, phase_b=machine.Pin, \*, keyword_arguments)
-
-    Construct and return a new quadrature encoder object using the following parameters:
 
       - *id*. Values of *id* depend on a particular port and its hardware.
         Values 0, 1, etc. are commonly used to select hardware block #0, #1, etc.
