@@ -26,7 +26,7 @@ Minimal example usage::
 Constructor
 -----------
 
-.. class:: Counter(id, src=None, \*, direction=1, edge=Counter.RISING, filter_ns=0)
+.. class:: Counter(id, src=None, \*, direction=1, filter_ns=0)
 
       - *id*. Values of *id* depend on a particular port and its hardware.
         Values 0, 1, etc. are commonly used to select hardware block #0, #1, etc.
@@ -46,12 +46,6 @@ Constructor
 
             - if Pin.value() == 0: count down -1
             - if Pin.value() == 1: count up +1
-
-      - *edge* specifies which edges of the input signal will be counted by the Counter:
-
-        - Counter.RISING : raise edges
-        - Counter.FALLING : fall edges
-        - Counter.RISING | Counter.FALLING : both edges
 
       - *filter_ns* specifies a minimum period of time in nanoseconds that the source signal needs to
         be stable for a pulse to be counted. Implementations should use the longest filter supported
