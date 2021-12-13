@@ -4,14 +4,13 @@
 class Encoder -- Quadrature Incremental Encoder
 ===============================================
 
-This class provides a Quadrature Incremental Encoder service.
-Wiki info at `Incremental encoder <https://en.wikipedia.org/wiki/Incremental_encoder>`_.
+This class provides a hardware-supported Quadrature Incremental Encoder service.
 
 If your port does not support hardware encoder use `Quadrature incremental encoder based on machine.Pin interrupts <https://github.com/IhorNehrutsa/MicroPython-quadrature-incremental-encoder>`_.
 See also Pin-interrupt-based encoders (and problems) from Peter Hinch `Incremental encoders <https://github.com/peterhinch/micropython-samples/blob/master/encoders/ENCODERS.md>`_.
 There is also `Dave Hylands an STM specific hardware-Timer-based solution <https://github.com/dhylands/upy-examples/blob/master/encoder.py>`_.
 
-Here is described a basics, commons for hardware-counters-based encoders of MicroPython ports:
+It is currently provided for ports:
 
     * :ref:`ESP32 <esp32_machine.Encoder>`
     * :ref:`MIMXRT <mimxrt_machine.Encoder>`
@@ -21,17 +20,17 @@ Minimal example usage::
     from machine import Pin, Encoder
 
     enc = Encoder(id, phase_a=Pin(0), phase_b=Pin(1))  # create Quadrature Encoder object and start to encode input pulses
-    enc.init(filter_ns=1000)           # switch source filtering on
-    value = enc.value()                # get current Encoder value
-    value = enc.value(0)               # get current Encoder value, set Encoder to 0
-    enc.deinit()                       # turn off the Encoder
+    enc.init(filter_ns=1000)                           # switch source filtering on
+    value = enc.value()                                # get current Encoder value
+    value = enc.value(0)                               # get current Encoder value, set Encoder to 0
+    enc.deinit()                                       # turn off the Encoder
 
-    print(enc)                         # show the Encoder object properties
+    print(enc)                                         # show the Encoder object properties
 
 Constructor
 -----------
 
-.. class:: Encoder(id, phase_a=machine.Pin, phase_b=machine.Pin, \*, keyword_arguments)
+.. class:: Encoder(id, phase_a=None, phase_b=None, \*, filter_ns=0)
 
       - *id*. Values of *id* depend on a particular port and its hardware.
         Values 0, 1, etc. are commonly used to select hardware block #0, #1, etc.
@@ -42,31 +41,22 @@ Constructor
         They may be omitted on ports that have predefined pins for *id*-specified hardware block.
         The keywords may be omitted, for example, Encoder(0, Pin(0), Pin(1)).
 
-    Keyword arguments:
-
-      - *filter_ns*\=value. Specifies an ns-value for the minimal time a signal has to be stable
-        at the pulse input to be recognized. The largest value is port-specific and is the default.
-        If the specified value is greater than the largest value, then - largest value is used.
-        A value of 0 or negative sets the filter is switched off.
+      - *filter_ns* specifies a minimum period of time in nanoseconds that the source signal needs to
+        be stable for a pulse to be counted. Implementations should use the longest filter supported
+        by the hardware that is less than or equal to this value. The default 0 is no filter.
 
 Methods
 -------
 
-.. method:: Encoder.init(keyword_arguments)
+.. method:: Encoder.init(*, phase_a, ...)
 
    Modify the settings of the Encoder object. See the **Constructor** for details about the parameters.
 
 .. method:: Encoder.deinit()
 
    Stops the Encoder, disables interrupts and releases hardware resources used by the encoder.
-   A Soft Reset deinitializes all Encoder's objects.
+   A Soft Reset involve deinitializing all Encoder objects.
 
 .. method:: Encoder.value([value])
 
-   Get (and optional set) the Encoder value as a signed integer.
-   With no argument, the actual Encoder value is returned.
-
-   With a single *value* argument the Encoder is set to that value.
-
-A simple check of Encoder performance
-`encoders_test.py <https://github.com/IhorNehrutsa/MicroPython-quadrature-incremental-encoder/blob/main/encoders_test.py>`_
+   Get, and optionally set, the counter value as a signed integer. Implementations should aim to do the get and set atomically.

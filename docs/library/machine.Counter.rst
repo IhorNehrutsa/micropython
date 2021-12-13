@@ -26,7 +26,7 @@ Minimal example usage::
 Constructor
 -----------
 
-.. class:: Counter(id, src=machine.Pin, \*, keyword_arguments)
+.. class:: Counter(id, src=None, \*, direction=1, edge=Counter.RISING, filter_ns=0)
 
       - *id*. Values of *id* depend on a particular port and its hardware.
         Values 0, 1, etc. are commonly used to select hardware block #0, #1, etc.
@@ -36,8 +36,6 @@ Constructor
         like integers or strings, which designate a Pin in the *machine.Pin* class.
         It may be omitted on ports that have a predefined pin for *id*-specified hardware block.
         The keyword may be omitted, for example, Counter(0, Pin(0)).
-
-    Keyword arguments:
 
       - *direction*\=value. Specifying the direction of counting. The default value is 1. Suitable values are:
 
@@ -49,26 +47,28 @@ Constructor
             - if Pin.value() == 0: count down -1
             - if Pin.value() == 1: count up +1
 
-      - *filter_ns*\=value. Specifies an ns-value for the minimal time a signal has to be stable
-        at the pulse input to be recognized. The largest value is port-specific and is the default.
-        If the specified value is greater than the largest value, then - largest value is used.
-        A value of 0 or negative sets the filter is switched off.
+      - *edge* specifies which edges of the input signal will be counted by the Counter:
+
+        - Counter.RISING : raise edges
+        - Counter.FALLING : fall edges
+        - Counter.RISING | Counter.FALLING : both edges
+
+      - *filter_ns* specifies a minimum period of time in nanoseconds that the source signal needs to
+        be stable for a pulse to be counted. Implementations should use the longest filter supported
+        by the hardware that is less than or equal to this value. The default 0 is no filter.
 
 Methods
 -------
 
-.. method:: Counter.init(keyword_arguments)
+.. method:: Counter.init(*, src, ...)
 
    Modify the settings of the Counter object. See the **Constructor** for details about the parameters.
 
 .. method:: Counter.deinit()
 
    Stops the Counter, disables interrupts and releases hardware resources used by the counter.
-   A Soft Reset deinitializes all Counter's objects.
+   A Soft Reset involve deinitializing all Encoder objects.
 
 .. method:: Counter.value([value])
 
-   Get (and optional set) the Counter value as a signed integer.
-   With no argument, the actual Counter value is returned.
-
-   With a single *value* argument the Counter is set to that value.
+   Get, and optionally set, the counter value as a signed integer. Implementations should aim to do the get and set atomically.
