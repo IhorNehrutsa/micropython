@@ -25,7 +25,7 @@ Minimal example usage::
 Constructor
 -----------
 
-.. class:: Counter(id, src=None, \*, direction=1, filter_ns=0)
+.. class:: Counter(id, src=None, \*, direction=Counter.UP, filter_ns=0)
 
       - *id*. Values of *id* depend on a particular port and its hardware.
         Values 0, 1, etc. are commonly used to select hardware block #0, #1, etc.
@@ -36,15 +36,12 @@ Constructor
         It may be omitted on ports that have a predefined pin for *id*-specified hardware block.
         The keyword may be omitted, for example, Counter(0, Pin(0)).
 
-      - *direction*\=value. Specifying the direction of counting. The default value is 1. Suitable values are:
+      - *direction* specifies a direction of counting. The default value is Counter.UP. Suitable values are:
 
-        - if value == 0 or False: count down -1
-        - if value != 0 or True: count up +1
+        - Counter.UP
+        - Counter.DOWN
         - a :ref:`machine.Pin <machine.Pin>` object. The level at that pin controls
-          the counting direction:
-
-            - if Pin.value() == 0: count down -1
-            - if Pin.value() == 1: count up +1
+          the counting direction.
 
       - *filter_ns* specifies a minimum period of time in nanoseconds that the source signal needs to
         be stable for a pulse to be counted. Implementations should use the longest filter supported
