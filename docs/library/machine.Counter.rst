@@ -17,7 +17,6 @@ Minimal example usage::
 
     counter = Counter(0, src=Pin(0, mode=Pin.INPUT))  # create Counter object and start to count input pulses
     counter.init(filter_ns=1000)                      # switch source filtering on
-    value = counter.value()                           # get current Counter value
     value = counter.value(0)                          # get current Counter value, set counter to 0
     counter.deinit()                                  # turn off the Counter
 
