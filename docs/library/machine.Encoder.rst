@@ -21,7 +21,6 @@ Minimal example usage::
 
     enc = Encoder(id, phase_a=Pin(0), phase_b=Pin(1))  # create Quadrature Encoder object and start to encode input pulses
     enc.init(filter_ns=1000)                           # switch source filtering on
-    value = enc.value()                                # get current Encoder value
     value = enc.value(0)                               # get current Encoder value, set Encoder to 0
     enc.deinit()                                       # turn off the Encoder
 
