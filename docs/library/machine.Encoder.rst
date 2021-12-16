@@ -41,7 +41,7 @@ Constructor
 
       - *filter_ns* specifies a minimum period of time in nanoseconds that the source signal needs to
         be stable for a pulse to be counted. Implementations should use the longest filter supported
-        by the hardware that is less than or equal to this value. The default 0 is no filter.
+        by the hardware that is less than or equal to this value. The default is 0 – no filter.
 
 Methods
 -------
