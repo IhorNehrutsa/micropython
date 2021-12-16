@@ -34,7 +34,6 @@ Constructor
         :ref:`machine.Pin <machine.Pin>` object, but a port may allow other values,
         like integers or strings, which designate a Pin in the *machine.Pin* class.
         It may be omitted on ports that have a predefined pin for *id*-specified hardware block.
-        The keyword may be omitted, for example, Counter(0, Pin(0)).
 
       - *direction* specifies a direction of counting. The default value is Counter.UP. Suitable values are:
 
