@@ -38,7 +38,6 @@ Constructor
         :ref:`machine.Pin <machine.Pin>` objects, but a port may allow other values,
         like integers or strings, which designate a Pin in the *machine.Pin* class.
         They may be omitted on ports that have predefined pins for *id*-specified hardware block.
-        The keywords may be omitted, for example, Encoder(0, Pin(0), Pin(1)).
 
       - *filter_ns* specifies a minimum period of time in nanoseconds that the source signal needs to
         be stable for a pulse to be counted. Implementations should use the longest filter supported
