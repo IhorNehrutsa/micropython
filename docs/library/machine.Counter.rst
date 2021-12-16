@@ -35,12 +35,9 @@ Constructor
         like integers or strings, which designate a Pin in the *machine.Pin* class.
         It may be omitted on ports that have a predefined pin for *id*-specified hardware block.
 
-      - *direction* specifies a direction of counting. The default value is Counter.UP. Suitable values are:
-
-        - Counter.UP
-        - Counter.DOWN
-        - a :ref:`machine.Pin <machine.Pin>` object. The level at that pin controls
-          the counting direction.
+      - *direction* specifies the direction to count. Values for this include the constants
+        ``Counter.UP`` (default value) and ``Counter.DOWN``. Ports may support additional values or
+        objects, such as a :ref:`machine.Pin <machine.Pin>` object to control the direction externally.
 
       - *filter_ns* specifies a minimum period of time in nanoseconds that the source signal needs to
         be stable for a pulse to be counted. Implementations should use the longest filter supported
@@ -61,3 +58,11 @@ Methods
 .. method:: Counter.value([value])
 
    Get, and optionally set, the counter value as a signed integer. Implementations should aim to do the get and set atomically.
+
+Constants
+---------
+
+.. data:: Counter.UP
+          Counter.DOWN
+
+   Select the counter direction.
