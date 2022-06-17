@@ -7,8 +7,12 @@ if sys.platform.startswith("esp"):
     from esp import dht_readinto
 elif sys.platform == "mimxrt":
     from mimxrt import dht_readinto
-else:
+elif sys.platform == "rp2":
+    from rp2 import dht_readinto
+elif sys.platform == "pyboard":
     from pyb import dht_readinto
+else:
+    from machine import dht_readinto
 
 
 class DHTBase:

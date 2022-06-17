@@ -1,4 +1,4 @@
-//Board config for Arduino Nano RP2040 Connect.
+// Board config for Arduino Nano RP2040 Connect.
 
 // Board and hardware specific configuration
 #define MICROPY_HW_BOARD_NAME           "Arduino Nano RP2040 Connect"
@@ -7,11 +7,18 @@
 // Enable networking and sockets.
 #define MICROPY_PY_NETWORK              (1)
 #define MICROPY_PY_USOCKET              (1)
+#define MICROPY_PY_WEBREPL              (1)
+#define MICROPY_PY_UWEBSOCKET           (1)
+#define MICROPY_PY_UHASHLIB_SHA1        (1)
+#define MICROPY_PY_OS_DUPTERM           (1)
+
+// Disable internal error numbers.
+#define MICROPY_USE_INTERNAL_ERRNO      (0)
 
 // Enable USB Mass Storage with FatFS filesystem.
 #define MICROPY_HW_USB_MSC              (1)
 #define MICROPY_HW_USB_VID              (0x2341)
-#define MICROPY_HW_USB_PID              (0x015e)
+#define MICROPY_HW_USB_PID              (0x025e)
 
 // UART 1 config.
 #define MICROPY_HW_UART1_TX             (8)
@@ -23,6 +30,14 @@
 #define MICROPY_HW_SPI1_SCK             (14)
 #define MICROPY_HW_SPI1_MOSI            (11)
 #define MICROPY_HW_SPI1_MISO            (8)
+
+// I2C0 config.
+#define MICROPY_HW_I2C0_SCL             (13)
+#define MICROPY_HW_I2C0_SDA             (12)
+
+// I2C1 config.
+#define MICROPY_HW_I2C1_SCL             (27)
+#define MICROPY_HW_I2C1_SDA             (26)
 
 // Bluetooth config.
 #define MICROPY_HW_BLE_UART_ID          (1)

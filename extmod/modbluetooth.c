@@ -97,8 +97,7 @@ STATIC mp_obj_t bluetooth_uuid_make_new(const mp_obj_type_t *type, size_t n_args
 
     mp_arg_check_num(n_args, n_kw, 1, 1, false);
 
-    mp_obj_bluetooth_uuid_t *self = m_new_obj(mp_obj_bluetooth_uuid_t);
-    self->base.type = &mp_type_bluetooth_uuid;
+    mp_obj_bluetooth_uuid_t *self = mp_obj_malloc(mp_obj_bluetooth_uuid_t, &mp_type_bluetooth_uuid);
 
     if (mp_obj_is_int(all_args[0])) {
         self->type = MP_BLUETOOTH_UUID_TYPE_16;
@@ -215,7 +214,9 @@ STATIC mp_int_t bluetooth_uuid_get_buffer(mp_obj_t self_in, mp_buffer_info_t *bu
     return 0;
 }
 
-#if !MICROPY_PY_BLUETOOTH_USE_SYNC_EVENTS && MICROPY_PY_BLUETOOTH_ENABLE_CENTRAL_MODE
+#if !MICROPY_PY_BLUETOOTH_USE_SYNC_EVENTS
+
+#if MICROPY_PY_BLUETOOTH_ENABLE_GATT_CLIENT
 STATIC void ringbuf_put_uuid(ringbuf_t *ringbuf, mp_obj_bluetooth_uuid_t *uuid) {
     assert(ringbuf_free(ringbuf) >= (size_t)uuid->type + 1);
     ringbuf_put(ringbuf, uuid->type);
@@ -223,7 +224,9 @@ STATIC void ringbuf_put_uuid(ringbuf_t *ringbuf, mp_obj_bluetooth_uuid_t *uuid) 
         ringbuf_put(ringbuf, uuid->data[i]);
     }
 }
+#endif
 
+#if MICROPY_PY_BLUETOOTH_ENABLE_CENTRAL_MODE
 STATIC void ringbuf_get_uuid(ringbuf_t *ringbuf, mp_obj_bluetooth_uuid_t *uuid) {
     assert(ringbuf_avail(ringbuf) >= 1);
     uuid->type = ringbuf_get(ringbuf);
@@ -232,7 +235,9 @@ STATIC void ringbuf_get_uuid(ringbuf_t *ringbuf, mp_obj_bluetooth_uuid_t *uuid) 
         uuid->data[i] = ringbuf_get(ringbuf);
     }
 }
-#endif // MICROPY_PY_BLUETOOTH_ENABLE_CENTRAL_MODE
+#endif
+
+#endif // !MICROPY_PY_BLUETOOTH_USE_SYNC_EVENTS
 
 const mp_obj_type_t mp_type_bluetooth_uuid = {
     { &mp_type_type },
@@ -998,6 +1003,8 @@ const mp_obj_module_t mp_module_ubluetooth = {
     .base = { &mp_type_module },
     .globals = (mp_obj_dict_t *)&mp_module_bluetooth_globals,
 };
+
+MP_REGISTER_MODULE(MP_QSTR_ubluetooth, mp_module_ubluetooth);
 
 // Helpers
 

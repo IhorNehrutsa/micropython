@@ -1,13 +1,15 @@
 {
     "deploy": [
-        "../deploy.md"
+        "../deploy_s3.md"
     ],
     "docs": "",
     "features": [
         "BLE",
         "WiFi"
     ],
-    "images": [],
+    "images": [
+        "generic_s3.jpg"
+    ],
     "mcu": "esp32s3",
     "product": "Generic ESP32-S3 (SPIRAM)",
     "thumbnail": "",

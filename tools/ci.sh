@@ -68,6 +68,23 @@ function ci_code_size_build {
 }
 
 ########################################################################################
+# .mpy file format
+
+function ci_mpy_format_setup {
+    sudo pip3 install pyelftools
+}
+
+function ci_mpy_format_test {
+    # Test mpy-tool.py dump feature on bytecode
+    python2 ./tools/mpy-tool.py -xd ports/minimal/frozentest.mpy
+    python3 ./tools/mpy-tool.py -xd ports/minimal/frozentest.mpy
+
+    # Test mpy-tool.py dump feature on native code
+    make -C examples/natmod/features1
+    ./tools/mpy-tool.py -xd examples/natmod/features1/features1.mpy
+}
+
+########################################################################################
 # ports/cc3200
 
 function ci_cc3200_setup {
@@ -83,6 +100,7 @@ function ci_cc3200_build {
 # ports/esp32
 
 function ci_esp32_setup_helper {
+    pip3 install pyelftools
     git clone https://github.com/espressif/esp-idf.git
     git -C esp-idf checkout $1
     git -C esp-idf submodule update --init \
@@ -107,15 +125,16 @@ function ci_esp32_idf402_setup {
 }
 
 function ci_esp32_idf44_setup {
-    # This commit is just before v5.0-dev
-    ci_esp32_setup_helper 142bb32c50fa9875b8b69fa539a2d59559460d72
+    ci_esp32_setup_helper v4.4
 }
 
 function ci_esp32_build {
     source esp-idf/export.sh
     make ${MAKEOPTS} -C mpy-cross
     make ${MAKEOPTS} -C ports/esp32 submodules
-    make ${MAKEOPTS} -C ports/esp32 USER_C_MODULES=../../../examples/usercmodule/micropython.cmake FROZEN_MANIFEST=$(pwd)/ports/esp32/boards/manifest.py
+    make ${MAKEOPTS} -C ports/esp32 \
+        USER_C_MODULES=../../../examples/usercmodule/micropython.cmake \
+        FROZEN_MANIFEST=$(pwd)/ports/esp32/boards/manifest_test.py
     if [ -d $IDF_PATH/components/esp32c3 ]; then
         make ${MAKEOPTS} -C ports/esp32 BOARD=GENERIC_C3
     fi
@@ -125,13 +144,16 @@ function ci_esp32_build {
     if [ -d $IDF_PATH/components/esp32s3 ]; then
         make ${MAKEOPTS} -C ports/esp32 BOARD=GENERIC_S3
     fi
+
+    # Test building native .mpy with xtensawin architecture.
+    ci_native_mpy_modules_build xtensawin
 }
 
 ########################################################################################
 # ports/esp8266
 
 function ci_esp8266_setup {
-    sudo pip install pyserial esptool
+    sudo pip install pyserial esptool==3.3.1
     wget https://github.com/jepler/esp-open-sdk/releases/download/2018-06-10/xtensa-lx106-elf-standalone.tar.gz
     zcat xtensa-lx106-elf-standalone.tar.gz | tar x
     # Remove this esptool.py so pip version is used instead
@@ -232,6 +254,20 @@ function ci_qemu_arm_build {
 }
 
 ########################################################################################
+# ports/renesas-ra
+
+function ci_renesas_ra_setup {
+    ci_gcc_arm_setup
+}
+
+function ci_renesas_ra_board_build {
+    make ${MAKEOPTS} -C mpy-cross
+    make ${MAKEOPTS} -C ports/renesas-ra submodules
+    make ${MAKEOPTS} -C ports/renesas-ra BOARD=RA4M1_CLICKER
+    make ${MAKEOPTS} -C ports/renesas-ra BOARD=RA6M2_EK
+}
+
+########################################################################################
 # ports/rp2
 
 function ci_rp2_setup {
@@ -240,10 +276,12 @@ function ci_rp2_setup {
 
 function ci_rp2_build {
     make ${MAKEOPTS} -C mpy-cross
-    git submodule update --init lib/pico-sdk lib/tinyusb
+    make ${MAKEOPTS} -C ports/rp2 submodules
     make ${MAKEOPTS} -C ports/rp2
     make ${MAKEOPTS} -C ports/rp2 clean
     make ${MAKEOPTS} -C ports/rp2 USER_C_MODULES=../../examples/usercmodule/micropython.cmake
+    make ${MAKEOPTS} -C ports/rp2 BOARD=W5100S_EVB_PICO submodules
+    make ${MAKEOPTS} -C ports/rp2 BOARD=W5100S_EVB_PICO
 }
 
 ########################################################################################
@@ -263,6 +301,7 @@ function ci_samd_build {
 
 function ci_stm32_setup {
     ci_gcc_arm_setup
+    pip3 install pyelftools
     pip3 install pyhy
 }
 
@@ -271,11 +310,16 @@ function ci_stm32_pyb_build {
     make ${MAKEOPTS} -C ports/stm32 submodules
     git submodule update --init lib/btstack
     git submodule update --init lib/mynewt-nimble
-    make ${MAKEOPTS} -C ports/stm32 BOARD=PYBV11 MICROPY_PY_WIZNET5K=5200 MICROPY_PY_CC3K=1 USER_C_MODULES=../../examples/usercmodule
+    make ${MAKEOPTS} -C ports/stm32 BOARD=PYBV11 MICROPY_PY_NETWORK_WIZNET5K=5200 MICROPY_PY_CC3K=1 USER_C_MODULES=../../examples/usercmodule
     make ${MAKEOPTS} -C ports/stm32 BOARD=PYBD_SF2
     make ${MAKEOPTS} -C ports/stm32 BOARD=PYBD_SF6 NANBOX=1 MICROPY_BLUETOOTH_NIMBLE=0 MICROPY_BLUETOOTH_BTSTACK=1
     make ${MAKEOPTS} -C ports/stm32/mboot BOARD=PYBV10 CFLAGS_EXTRA='-DMBOOT_FSLOAD=1 -DMBOOT_VFS_LFS2=1'
     make ${MAKEOPTS} -C ports/stm32/mboot BOARD=PYBD_SF6
+    make ${MAKEOPTS} -C ports/stm32/mboot BOARD=STM32F769DISC CFLAGS_EXTRA='-DMBOOT_ADDRESS_SPACE_64BIT=1 -DMBOOT_SDCARD_ADDR=0x100000000ULL -DMBOOT_SDCARD_BYTE_SIZE=0x400000000ULL -DMBOOT_FSLOAD=1 -DMBOOT_VFS_FAT=1'
+
+    # Test building native .mpy with armv7emsp architecture.
+    git submodule update --init lib/berkeley-db-1.xx
+    ci_native_mpy_modules_build armv7emsp
 }
 
 function ci_stm32_nucleo_build {
@@ -285,7 +329,7 @@ function ci_stm32_nucleo_build {
 
     # Test building various MCU families, some with additional options.
     make ${MAKEOPTS} -C ports/stm32 BOARD=NUCLEO_F091RC
-    make ${MAKEOPTS} -C ports/stm32 BOARD=NUCLEO_H743ZI CFLAGS_EXTRA='-DMICROPY_PY_THREAD=1'
+    make ${MAKEOPTS} -C ports/stm32 BOARD=NUCLEO_H743ZI COPT=-O2 CFLAGS_EXTRA='-DMICROPY_PY_THREAD=1'
     make ${MAKEOPTS} -C ports/stm32 BOARD=NUCLEO_L073RZ
     make ${MAKEOPTS} -C ports/stm32 BOARD=NUCLEO_L476RG DEBUG=1
 
@@ -369,6 +413,7 @@ function ci_unix_run_tests_full_helper {
     fi
     make -C ports/unix VARIANT=$variant "$@" test_full
     (cd tests && MICROPY_CPYTHON3=python3 MICROPY_MICROPYTHON=../ports/unix/$micropython ./run-multitests.py multi_net/*.py)
+    (cd tests && MICROPY_CPYTHON3=python3 MICROPY_MICROPYTHON=../ports/unix/$micropython ./run-perfbench.py 1000 1000)
 }
 
 function ci_native_mpy_modules_build {
@@ -379,6 +424,7 @@ function ci_native_mpy_modules_build {
     fi
     make -C examples/natmod/features1 ARCH=$arch
     make -C examples/natmod/features2 ARCH=$arch
+    make -C examples/natmod/features3 ARCH=$arch
     make -C examples/natmod/btree ARCH=$arch
     make -C examples/natmod/framebuf ARCH=$arch
     make -C examples/natmod/uheapq ARCH=$arch
@@ -408,10 +454,6 @@ function ci_unix_standard_run_tests {
     ci_unix_run_tests_full_helper standard
 }
 
-function ci_unix_standard_run_perfbench {
-    (cd tests && MICROPY_CPYTHON3=python3 MICROPY_MICROPYTHON=../ports/unix/micropython ./run-perfbench.py 1000 1000)
-}
-
 function ci_unix_dev_build {
     ci_unix_build_helper VARIANT=dev
 }
@@ -436,9 +478,33 @@ function ci_unix_coverage_run_tests {
     ci_unix_run_tests_full_helper coverage
 }
 
+function ci_unix_coverage_run_mpy_merge_tests {
+    mptop=$(pwd)
+    outdir=$(mktemp -d)
+    allmpy=()
+
+    # Compile a selection of tests to .mpy and execute them, collecting the output.
+    # None of the tests should SKIP.
+    for inpy in $mptop/tests/basics/[acdel]*.py; do
+        test=$(basename $inpy .py)
+        echo $test
+        outmpy=$outdir/$test.mpy
+        $mptop/mpy-cross/mpy-cross -o $outmpy $inpy
+        (cd $outdir && $mptop/ports/unix/micropython-coverage -m $test >> out-individual)
+        allmpy+=($outmpy)
+    done
+
+    # Merge all the tests into one .mpy file, and then execute it.
+    python3 $mptop/tools/mpy-tool.py --merge -o $outdir/merged.mpy ${allmpy[@]}
+    (cd $outdir && $mptop/ports/unix/micropython-coverage -m merged > out-merged)
+
+    # Make sure the outputs match.
+    diff $outdir/out-individual $outdir/out-merged && /bin/rm -rf $outdir
+}
+
 function ci_unix_coverage_run_native_mpy_tests {
     MICROPYPATH=examples/natmod/features2 ./ports/unix/micropython-coverage -m features2
-    (cd tests && ./run-natmodtests.py "$@" extmod/{btree*,framebuf*,uheapq*,ure*,uzlib*}.py)
+    (cd tests && ./run-natmodtests.py "$@" extmod/{btree*,framebuf*,uheapq*,urandom*,ure*,uzlib*}.py)
 }
 
 function ci_unix_32bit_setup {
@@ -467,7 +533,7 @@ function ci_unix_coverage_32bit_run_native_mpy_tests {
 
 function ci_unix_nanbox_build {
     # Use Python 2 to check that it can run the build scripts
-    ci_unix_build_helper PYTHON=python2 VARIANT=nanbox
+    ci_unix_build_helper PYTHON=python2 VARIANT=nanbox CFLAGS_EXTRA="-DMICROPY_PY_MATH_CONSTANTS=1"
     ci_unix_build_ffi_lib_helper gcc -m32
 }
 
@@ -516,7 +582,7 @@ function ci_unix_settrace_build {
 }
 
 function ci_unix_settrace_run_tests {
-    ci_unix_run_tests_helper "${CI_UNIX_OPTS_SYS_SETTRACE[@]}"
+    ci_unix_run_tests_full_helper standard "${CI_UNIX_OPTS_SYS_SETTRACE[@]}"
 }
 
 function ci_unix_settrace_stackless_build {
@@ -525,7 +591,7 @@ function ci_unix_settrace_stackless_build {
 }
 
 function ci_unix_settrace_stackless_run_tests {
-    ci_unix_run_tests_helper "${CI_UNIX_OPTS_SYS_SETTRACE_STACKLESS[@]}"
+    ci_unix_run_tests_full_helper standard "${CI_UNIX_OPTS_SYS_SETTRACE_STACKLESS[@]}"
 }
 
 function ci_unix_macos_build {
@@ -542,10 +608,9 @@ function ci_unix_macos_build {
 
 function ci_unix_macos_run_tests {
     # Issues with macOS tests:
-    # - OSX has poor time resolution and these uasyncio tests do not have correct output
     # - import_pkg7 has a problem with relative imports
     # - urandom_basic has a problem with getrandbits(0)
-    (cd tests && ./run-tests.py --exclude 'uasyncio_(basic|heaplock|lock|wait_task)' --exclude 'import_pkg7.py' --exclude 'urandom_basic.py')
+    (cd tests && ./run-tests.py --exclude 'import_pkg7.py' --exclude 'urandom_basic.py')
 }
 
 function ci_unix_qemu_mips_setup {
@@ -603,29 +668,32 @@ function ci_windows_build {
 ########################################################################################
 # ports/zephyr
 
+ZEPHYR_DOCKER_VERSION=v0.21.0
+ZEPHYR_SDK_VERSION=0.13.2
+ZEPHYR_VERSION=v3.0.0
+
 function ci_zephyr_setup {
-    docker pull zephyrprojectrtos/ci:v0.17.3
+    docker pull zephyrprojectrtos/ci:${ZEPHYR_DOCKER_VERSION}
     docker run --name zephyr-ci -d -it \
       -v "$(pwd)":/micropython \
-      -e ZEPHYR_SDK_INSTALL_DIR=/opt/toolchains/zephyr-sdk-0.12.4 \
+      -e ZEPHYR_SDK_INSTALL_DIR=/opt/toolchains/zephyr-sdk-${ZEPHYR_SDK_VERSION} \
       -e ZEPHYR_TOOLCHAIN_VARIANT=zephyr \
       -e ZEPHYR_BASE=/zephyrproject/zephyr \
       -w /micropython/ports/zephyr \
-      zephyrprojectrtos/ci:v0.17.3
+      zephyrprojectrtos/ci:${ZEPHYR_DOCKER_VERSION}
     docker ps -a
 }
 
 function ci_zephyr_install {
-    docker exec zephyr-ci west init --mr v2.6.0 /zephyrproject
+    docker exec zephyr-ci west init --mr ${ZEPHYR_VERSION} /zephyrproject
     docker exec -w /zephyrproject zephyr-ci west update
     docker exec -w /zephyrproject zephyr-ci west zephyr-export
 }
 
 function ci_zephyr_build {
     docker exec zephyr-ci west build -p auto -b qemu_x86 -- -DCONF_FILE=prj_minimal.conf
-    docker exec zephyr-ci west build -p auto -b frdm_k64f -- -DCONF_FILE=prj_minimal.conf
     docker exec zephyr-ci west build -p auto -b qemu_x86
     docker exec zephyr-ci west build -p auto -b frdm_k64f
     docker exec zephyr-ci west build -p auto -b mimxrt1050_evk
-    docker exec zephyr-ci west build -p auto -b reel_board
+    docker exec zephyr-ci west build -p auto -b nucleo_wb55rg # for bluetooth
 }

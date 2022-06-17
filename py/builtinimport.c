@@ -50,6 +50,9 @@
 // Must be a string of one byte.
 #define PATH_SEP_CHAR "/"
 
+// Virtual sys.path entry that maps to the frozen modules.
+#define MP_FROZEN_PATH_PREFIX ".frozen/"
+
 bool mp_obj_is_package(mp_obj_t module) {
     mp_obj_t dest[2];
     mp_load_method_maybe(module, MP_QSTR___path__, dest);
@@ -62,9 +65,10 @@ bool mp_obj_is_package(mp_obj_t module) {
 // will return whether the path is a file, directory, or doesn't exist.
 STATIC mp_import_stat_t stat_path_or_frozen(const char *path) {
     #if MICROPY_MODULE_FROZEN
-    mp_import_stat_t st = mp_frozen_stat(path);
-    if (st != MP_IMPORT_STAT_NO_EXIST) {
-        return st;
+    // Only try and load as a frozen module if it starts with .frozen/.
+    const int frozen_path_prefix_len = strlen(MP_FROZEN_PATH_PREFIX);
+    if (strncmp(path, MP_FROZEN_PATH_PREFIX, frozen_path_prefix_len) == 0) {
+        return mp_find_frozen_module(path + frozen_path_prefix_len, NULL, NULL);
     }
     #endif
     return mp_import_stat(path);
@@ -142,28 +146,28 @@ STATIC mp_import_stat_t stat_top_level_dir_or_file(qstr mod_name, vstr_t *dest) 
 }
 
 #if MICROPY_MODULE_FROZEN_STR || MICROPY_ENABLE_COMPILER
-STATIC void do_load_from_lexer(mp_obj_t module_obj, mp_lexer_t *lex) {
+STATIC void do_load_from_lexer(mp_module_context_t *context, mp_lexer_t *lex) {
     #if MICROPY_PY___FILE__
     qstr source_name = lex->source_name;
-    mp_store_attr(module_obj, MP_QSTR___file__, MP_OBJ_NEW_QSTR(source_name));
+    mp_store_attr(MP_OBJ_FROM_PTR(&context->module), MP_QSTR___file__, MP_OBJ_NEW_QSTR(source_name));
     #endif
 
     // parse, compile and execute the module in its context
-    mp_obj_dict_t *mod_globals = mp_obj_module_get_globals(module_obj);
+    mp_obj_dict_t *mod_globals = context->module.globals;
     mp_parse_compile_execute(lex, MP_PARSE_FILE_INPUT, mod_globals, mod_globals);
 }
 #endif
 
 #if (MICROPY_HAS_FILE_READER && MICROPY_PERSISTENT_CODE_LOAD) || MICROPY_MODULE_FROZEN_MPY
-STATIC void do_execute_raw_code(mp_obj_t module_obj, mp_raw_code_t *raw_code, const char *source_name) {
+STATIC void do_execute_raw_code(mp_module_context_t *context, const mp_raw_code_t *rc, const mp_module_context_t *mc, const char *source_name) {
     (void)source_name;
 
     #if MICROPY_PY___FILE__
-    mp_store_attr(module_obj, MP_QSTR___file__, MP_OBJ_NEW_QSTR(qstr_from_str(source_name)));
+    mp_store_attr(MP_OBJ_FROM_PTR(&context->module), MP_QSTR___file__, MP_OBJ_NEW_QSTR(qstr_from_str(source_name)));
     #endif
 
     // execute the module in its context
-    mp_obj_dict_t *mod_globals = mp_obj_module_get_globals(module_obj);
+    mp_obj_dict_t *mod_globals = context->module.globals;
 
     // save context
     mp_obj_dict_t *volatile old_globals = mp_globals_get();
@@ -175,7 +179,7 @@ STATIC void do_execute_raw_code(mp_obj_t module_obj, mp_raw_code_t *raw_code, co
 
     nlr_buf_t nlr;
     if (nlr_push(&nlr) == 0) {
-        mp_obj_t module_fun = mp_make_function_from_raw_code(raw_code, MP_OBJ_NULL, MP_OBJ_NULL);
+        mp_obj_t module_fun = mp_make_function_from_raw_code(rc, mc, NULL);
         mp_call_function_0(module_fun);
 
         // finish nlr block, restore context
@@ -191,34 +195,40 @@ STATIC void do_execute_raw_code(mp_obj_t module_obj, mp_raw_code_t *raw_code, co
 }
 #endif
 
-STATIC void do_load(mp_obj_t module_obj, vstr_t *file) {
+STATIC void do_load(mp_module_context_t *module_obj, vstr_t *file) {
     #if MICROPY_MODULE_FROZEN || MICROPY_ENABLE_COMPILER || (MICROPY_PERSISTENT_CODE_LOAD && MICROPY_HAS_FILE_READER)
-    char *file_str = vstr_null_terminated_str(file);
+    const char *file_str = vstr_null_terminated_str(file);
     #endif
 
     // If we support frozen modules (either as str or mpy) then try to find the
     // requested filename in the list of frozen module filenames.
     #if MICROPY_MODULE_FROZEN
     void *modref;
-    int frozen_type = mp_find_frozen_module(file_str, file->len, &modref);
+    int frozen_type;
+    const int frozen_path_prefix_len = strlen(MP_FROZEN_PATH_PREFIX);
+    if (strncmp(file_str, MP_FROZEN_PATH_PREFIX, frozen_path_prefix_len) == 0) {
+        mp_find_frozen_module(file_str + frozen_path_prefix_len, &frozen_type, &modref);
 
-    // If we support frozen str modules and the compiler is enabled, and we
-    // found the filename in the list of frozen files, then load and execute it.
-    #if MICROPY_MODULE_FROZEN_STR
-    if (frozen_type == MP_FROZEN_STR) {
-        do_load_from_lexer(module_obj, modref);
-        return;
-    }
-    #endif
+        // If we support frozen str modules and the compiler is enabled, and we
+        // found the filename in the list of frozen files, then load and execute it.
+        #if MICROPY_MODULE_FROZEN_STR
+        if (frozen_type == MP_FROZEN_STR) {
+            do_load_from_lexer(module_obj, modref);
+            return;
+        }
+        #endif
 
-    // If we support frozen mpy modules and we found a corresponding file (and
-    // its data) in the list of frozen files, execute it.
-    #if MICROPY_MODULE_FROZEN_MPY
-    if (frozen_type == MP_FROZEN_MPY) {
-        do_execute_raw_code(module_obj, modref, file_str);
-        return;
+        // If we support frozen mpy modules and we found a corresponding file (and
+        // its data) in the list of frozen files, execute it.
+        #if MICROPY_MODULE_FROZEN_MPY
+        if (frozen_type == MP_FROZEN_MPY) {
+            const mp_frozen_module_t *frozen = modref;
+            module_obj->constants = frozen->constants;
+            do_execute_raw_code(module_obj, frozen->rc, module_obj, file_str + frozen_path_prefix_len);
+            return;
+        }
+        #endif
     }
-    #endif
 
     #endif // MICROPY_MODULE_FROZEN
 
@@ -226,8 +236,8 @@ STATIC void do_load(mp_obj_t module_obj, vstr_t *file) {
     // the correct format and, if so, load and execute the file.
     #if MICROPY_HAS_FILE_READER && MICROPY_PERSISTENT_CODE_LOAD
     if (file_str[file->len - 3] == 'm') {
-        mp_raw_code_t *raw_code = mp_raw_code_load_file(file_str);
-        do_execute_raw_code(module_obj, raw_code, file_str);
+        mp_compiled_module_t cm = mp_raw_code_load_file(file_str, module_obj);
+        do_execute_raw_code(module_obj, cm.rc, cm.context, file_str);
         return;
     }
     #endif
@@ -363,6 +373,10 @@ STATIC mp_obj_t process_import_at_level(qstr full_mod_name, qstr level_mod_name,
             qstr umodule_name = qstr_from_str(umodule_buf);
             module_obj = mp_module_get_builtin(umodule_name);
         }
+        #elif MICROPY_PY_SYS
+        if (stat == MP_IMPORT_STAT_NO_EXIST && module_obj == MP_OBJ_NULL && level_mod_name == MP_QSTR_sys) {
+            module_obj = MP_OBJ_FROM_PTR(&mp_module_sys);
+        }
         #endif
     } else {
         DEBUG_printf("Searching for sub-module\n");
@@ -426,7 +440,7 @@ STATIC mp_obj_t process_import_at_level(qstr full_mod_name, qstr level_mod_name,
             size_t orig_path_len = path->len;
             vstr_add_str(path, PATH_SEP_CHAR "__init__.py");
             if (stat_file_py_or_mpy(path) == MP_IMPORT_STAT_FILE) {
-                do_load(module_obj, path);
+                do_load(MP_OBJ_TO_PTR(module_obj), path);
             } else {
                 // No-op. Nothing to load.
                 // mp_warning("%s is imported as namespace package", vstr_str(&path));
@@ -435,7 +449,7 @@ STATIC mp_obj_t process_import_at_level(qstr full_mod_name, qstr level_mod_name,
             path->len = orig_path_len;
         } else { // MP_IMPORT_STAT_FILE
             // File -- execute "path.(m)py".
-            do_load(module_obj, path);
+            do_load(MP_OBJ_TO_PTR(module_obj), path);
             // Note: This should be the last component in the import path.  If
             // there are remaining components then it's an ImportError
             // because the current path(the module that was just loaded) is
