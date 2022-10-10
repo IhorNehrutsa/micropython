@@ -46,11 +46,15 @@
 
 #include "pico/stdlib.h"
 #include "pico/binary_info.h"
+#include "pico/unique_id.h"
 #include "hardware/rtc.h"
 #include "hardware/structs/rosc.h"
 #if MICROPY_PY_LWIP
 #include "lwip/init.h"
 #include "lwip/apps/mdns.h"
+#endif
+#if MICROPY_PY_NETWORK_CYW43
+#include "lib/cyw43-driver/src/cyw43.h"
 #endif
 
 #ifndef MICROPY_GC_HEAP_SIZE
@@ -62,7 +66,7 @@
 #endif
 
 extern uint8_t __StackTop, __StackBottom;
-static char gc_heap[MICROPY_GC_HEAP_SIZE];
+__attribute__((section(".uninitialized_bss"))) static char gc_heap[MICROPY_GC_HEAP_SIZE];
 
 // Embed version info in the binary in machine readable form
 bi_decl(bi_program_version_string(MICROPY_GIT_TAG));
@@ -88,6 +92,10 @@ int main(int argc, char **argv) {
     #if MICROPY_PY_THREAD
     bi_decl(bi_program_feature("thread support"))
     mp_thread_init();
+    #endif
+
+    #ifndef NDEBUG
+    stdio_init_all();
     #endif
 
     // Start and initialise the RTC
@@ -116,6 +124,28 @@ int main(int argc, char **argv) {
     #if LWIP_MDNS_RESPONDER
     mdns_resp_init();
     #endif
+    #endif
+
+    #if MICROPY_PY_NETWORK_CYW43
+    {
+        cyw43_init(&cyw43_state);
+        cyw43_irq_init();
+        cyw43_post_poll_hook(); // enable the irq
+        uint8_t buf[8];
+        memcpy(&buf[0], "PICO", 4);
+
+        // MAC isn't loaded from OTP yet, so use unique id to generate the default AP ssid.
+        const char hexchr[16] = "0123456789ABCDEF";
+        pico_unique_board_id_t pid;
+        pico_get_unique_board_id(&pid);
+        buf[4] = hexchr[pid.id[7] >> 4];
+        buf[5] = hexchr[pid.id[6] & 0xf];
+        buf[6] = hexchr[pid.id[5] >> 4];
+        buf[7] = hexchr[pid.id[4] & 0xf];
+        cyw43_wifi_ap_set_ssid(&cyw43_state, 8, buf);
+        cyw43_wifi_ap_set_auth(&cyw43_state, CYW43_AUTH_WPA2_AES_PSK);
+        cyw43_wifi_ap_set_password(&cyw43_state, 8, (const uint8_t *)"picoW123");
+    }
     #endif
 
     for (;;) {

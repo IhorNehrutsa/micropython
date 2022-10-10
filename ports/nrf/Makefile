@@ -56,12 +56,11 @@ FROZEN_MANIFEST ?= modules/manifest.py
 
 # include py core make definitions
 include ../../py/py.mk
+include ../../extmod/extmod.mk
 
-GIT_SUBMODULES = lib/nrfx lib/tinyusb
+GIT_SUBMODULES += lib/nrfx lib/tinyusb
 
 MICROPY_VFS_FAT ?= 0
-MPY_CROSS = ../../mpy-cross/mpy-cross
-MPY_TOOL = ../../tools/mpy-tool.py
 
 CROSS_COMPILE ?= arm-none-eabi-
 
@@ -125,7 +124,7 @@ endif
 
 
 CFLAGS += $(CFLAGS_MCU_$(MCU_SERIES))
-CFLAGS += $(INC) -Wall -Werror -g -ansi -std=c11 -nostdlib $(COPT) $(NRF_DEFINES) $(CFLAGS_MOD) $(CFLAGS_EXTRA)
+CFLAGS += $(INC) -Wall -Werror -ansi -std=c11 -nostdlib $(COPT) $(NRF_DEFINES) $(CFLAGS_MOD) $(CFLAGS_EXTRA)
 CFLAGS += -fno-strict-aliasing
 CFLAGS += -Iboards/$(BOARD)
 CFLAGS += -DNRF5_HAL_H='<$(MCU_VARIANT)_hal.h>'
@@ -141,9 +140,12 @@ endif
 #Debugging/Optimization
 ifeq ($(DEBUG), 1)
 #ASMFLAGS += -g -gtabs+
-CFLAGS += -O0 -ggdb
+CFLAGS += -g -O0
 LDFLAGS += -O0
 else
+ifneq ($(LTO), 1)
+CFLAGS += -g  # always include debug info in the ELF, unless LTO is on
+endif
 CFLAGS += -Os -DNDEBUG
 LDFLAGS += -Os
 endif
@@ -231,6 +233,7 @@ SRC_LIB += $(addprefix shared/,\
 	runtime/pyexec.c \
 	runtime/sys_stdio_mphal.c \
 	runtime/interrupt_char.c \
+	runtime/tinyusb_helpers.c \
 	timeutils/timeutils.c \
 	)
 
@@ -274,6 +277,7 @@ SRC_C += \
 	drivers/ticker.c \
 	drivers/bluetooth/ble_drv.c \
 	drivers/bluetooth/ble_uart.c \
+	$(wildcard $(BOARD_DIR)/*.c) \
 
 ifeq ($(MCU_SUB_VARIANT), nrf52840)
 

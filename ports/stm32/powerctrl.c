@@ -78,7 +78,7 @@
 // Location in RAM of bootloader state (just after the top of the stack).
 // STM32H7 has ECC and writes to RAM must be 64-bit so they are fully committed
 // to actual SRAM before a system reset occurs.
-#define BL_STATE_PTR                ((uint64_t *)&_estack)
+#define BL_STATE_PTR                ((uint64_t *)&_bl_state)
 #define BL_STATE_KEY                (0x5a5)
 #define BL_STATE_KEY_MASK           (0xfff)
 #define BL_STATE_KEY_SHIFT          (32)
@@ -87,7 +87,7 @@
 #define BL_STATE_GET_REG(s)         ((s) & 0xffffffff)
 #define BL_STATE_GET_KEY(s)         (((s) >> BL_STATE_KEY_SHIFT) & BL_STATE_KEY_MASK)
 #define BL_STATE_GET_ADDR(s)        (((s) >> BL_STATE_KEY_SHIFT) & ~BL_STATE_KEY_MASK)
-extern uint64_t _estack[];
+extern uint64_t _bl_state[];
 #endif
 
 static inline void powerctrl_disable_hsi_if_unused(void) {
@@ -143,7 +143,7 @@ void powerctrl_check_enter_bootloader(void) {
     if (BL_STATE_GET_KEY(bl_state) == BL_STATE_KEY && (RCC->RCC_SR & RCC_SR_SFTRSTF)) {
         // Reset by NVIC_SystemReset with bootloader data set -> branch to bootloader
         RCC->RCC_SR = RCC_SR_RMVF;
-        #if defined(STM32F0) || defined(STM32F4) || defined(STM32G0) || defined(STM32G4) || defined(STM32L0) || defined(STM32L4) || defined(STM32WB)
+        #if defined(STM32F0) || defined(STM32F4) || defined(STM32G0) || defined(STM32G4) || defined(STM32L0) || defined(STM32L1) || defined(STM32L4) || defined(STM32WB)
         __HAL_SYSCFG_REMAPMEMORY_SYSTEMFLASH();
         #endif
         branch_to_bootloader(BL_STATE_GET_REG(bl_state), BL_STATE_GET_ADDR(bl_state));
@@ -286,7 +286,7 @@ int powerctrl_rcc_clock_config_pll(RCC_ClkInitTypeDef *rcc_init, uint32_t sysclk
 
 #endif
 
-#if !defined(STM32F0) && !defined(STM32G0) && !defined(STM32L0) && !defined(STM32L4)
+#if !defined(STM32F0) && !defined(STM32G0) && !defined(STM32L0) && !defined(STM32L1) && !defined(STM32L4)
 
 STATIC uint32_t calc_ahb_div(uint32_t wanted_div) {
     #if defined(STM32H7)
@@ -708,7 +708,7 @@ void powerctrl_enter_stop_mode(void) {
     __HAL_RCC_WAKEUPSTOP_CLK_CONFIG(RCC_STOP_WAKEUPCLOCK_MSI);
     #endif
 
-    #if !defined(STM32F0) && !defined(STM32G0) && !defined(STM32G4) && !defined(STM32L0) && !defined(STM32L4) && !defined(STM32WB) && !defined(STM32WL)
+    #if !defined(STM32F0) && !defined(STM32G0) && !defined(STM32G4) && !defined(STM32L0) && !defined(STM32L1) && !defined(STM32L4) && !defined(STM32WB) && !defined(STM32WL)
     // takes longer to wake but reduces stop current
     HAL_PWREx_EnableFlashPowerDown();
     #endif

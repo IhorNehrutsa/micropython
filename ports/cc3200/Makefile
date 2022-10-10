@@ -25,6 +25,9 @@ CFLAGS += -g -ffunction-sections -fdata-sections -fno-common -fsigned-char -mno-
 CFLAGS += -Iboards/$(BOARD)
 CFLAGS += $(CFLAGS_MOD)
 
+# Workaround gcc 12.1 bug.
+CFLAGS += -Wno-array-bounds
+
 LDFLAGS = -Wl,-nostdlib -Wl,--gc-sections -Wl,-Map=$@.map
 
 FLASH_SIZE_WIPY = 2M
@@ -39,6 +42,7 @@ MICROPY_ROM_TEXT_COMPRESSION ?= 1
 
 # include MicroPython make definitions
 include $(TOP)/py/py.mk
+include $(TOP)/extmod/extmod.mk
 include application.mk
 else
 ifeq ($(BTARGET), bootloader)

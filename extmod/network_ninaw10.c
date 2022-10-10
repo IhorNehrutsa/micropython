@@ -159,7 +159,7 @@ STATIC mp_obj_t network_ninaw10_active(size_t n_args, const mp_obj_t *args) {
                     MP_OBJ_NEW_QSTR(MP_QSTR_freq), MP_OBJ_NEW_SMALL_INT(10),
                     MP_OBJ_NEW_QSTR(MP_QSTR_callback), MP_OBJ_FROM_PTR(&network_ninaw10_timer_callback_obj),
                 };
-                MP_STATE_PORT(mp_wifi_timer) = machine_timer_type.make_new((mp_obj_t)&machine_timer_type, 0, 2, timer_args);
+                MP_STATE_PORT(mp_wifi_timer) = MP_OBJ_TYPE_GET_SLOT(&machine_timer_type, make_new)((mp_obj_t)&machine_timer_type, 0, 2, timer_args);
             }
         } else {
             nina_deinit();
@@ -196,9 +196,9 @@ STATIC mp_obj_t network_ninaw10_scan(mp_obj_t self_in) {
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(network_ninaw10_scan_obj, network_ninaw10_scan);
 
 STATIC mp_obj_t network_ninaw10_connect(mp_uint_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
-    enum { ARG_essid, ARG_key, ARG_security, ARG_channel };
+    enum { ARG_ssid, ARG_key, ARG_security, ARG_channel };
     static const mp_arg_t allowed_args[] = {
-        { MP_QSTR_essid,    MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
+        { MP_QSTR_ssid,     MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
         { MP_QSTR_key,      MP_ARG_OBJ, {.u_obj = mp_const_none} },
         { MP_QSTR_security, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = NINA_SEC_WPA_PSK} },
         { MP_QSTR_channel,  MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 1} },
@@ -210,7 +210,7 @@ STATIC mp_obj_t network_ninaw10_connect(mp_uint_t n_args, const mp_obj_t *pos_ar
     mp_arg_parse_all(n_args - 1, pos_args + 1, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
     // get ssid
-    const char *ssid = mp_obj_str_get_str(args[ARG_essid].u_obj);
+    const char *ssid = mp_obj_str_get_str(args[ARG_ssid].u_obj);
 
     if (strlen(ssid) == 0) {
         mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("SSID can't be empty!"));
@@ -304,7 +304,7 @@ STATIC mp_obj_t network_ninaw10_config(size_t n_args, const mp_obj_t *args, mp_m
         }
 
         switch (mp_obj_str_get_qstr(args[1])) {
-            case MP_QSTR_essid: {
+            case MP_QSTR_ssid: {
                 nina_netinfo_t netinfo;
                 nina_netinfo(&netinfo);
                 return mp_obj_new_str(netinfo.ssid, strlen(netinfo.ssid));
@@ -774,13 +774,16 @@ static const mp_rom_map_elem_t nina_locals_dict_table[] = {
 
 static MP_DEFINE_CONST_DICT(nina_locals_dict, nina_locals_dict_table);
 
+STATIC MP_DEFINE_CONST_OBJ_FULL_TYPE(
+    mod_network_nic_type_nina_base,
+    MP_QSTR_nina,
+    MP_TYPE_FLAG_NONE,
+    make_new, network_ninaw10_make_new,
+    locals_dict, &nina_locals_dict
+    );
+
 const mod_network_nic_type_t mod_network_nic_type_nina = {
-    .base = {
-        { &mp_type_type },
-        .name = MP_QSTR_nina,
-        .make_new = network_ninaw10_make_new,
-        .locals_dict = (mp_obj_t)&nina_locals_dict,
-    },
+    .base = mod_network_nic_type_nina_base,
     .gethostbyname = network_ninaw10_gethostbyname,
     .socket = network_ninaw10_socket_socket,
     .close = network_ninaw10_socket_close,
@@ -796,5 +799,9 @@ const mod_network_nic_type_t mod_network_nic_type_nina = {
     .settimeout = network_ninaw10_socket_settimeout,
     .ioctl = network_ninaw10_socket_ioctl,
 };
+
+MP_REGISTER_ROOT_POINTER(struct _machine_spi_obj_t *mp_wifi_spi);
+MP_REGISTER_ROOT_POINTER(struct _machine_timer_obj_t *mp_wifi_timer);
+MP_REGISTER_ROOT_POINTER(struct _mp_obj_list_t *mp_wifi_sockpoll_list);
 
 #endif // #if MICROPY_PY_BLUETOOTH && MICROPY_PY_NETWORK_NINAW10

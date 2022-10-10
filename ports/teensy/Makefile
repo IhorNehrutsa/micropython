@@ -44,6 +44,7 @@ endif # USE_FROZEN
 
 # include py core make definitions
 include $(TOP)/py/py.mk
+include $(TOP)/extmod/extmod.mk
 
 # If you set USE_ARDUINO_TOOLCHAIN=1 then this makefile will attempt to use
 # the toolchain that comes with Teensyduino
@@ -104,8 +105,9 @@ LIBS += -L $(dir $(LIBC_FILE_NAME)) -lc
 LIBS += -L $(dir $(LIBGCC_FILE_NAME)) -lgcc
 
 #Debugging/Optimization
+CFLAGS += -g  # always include debug info in the ELF
 ifdef DEBUG
-CFLAGS += -Og -ggdb
+CFLAGS += -Og
 else
 CFLAGS += -Os #-DNDEBUG
 endif

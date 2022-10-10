@@ -34,8 +34,9 @@ endif
 CSUPEROPT = -Os # save some code space
 
 # Tune for Debugging or Optimization
+CFLAGS += -g  # always include debug info in the ELF
 ifeq ($(DEBUG), 1)
-CFLAGS += -O0 -ggdb
+CFLAGS += -O0
 else
 CFLAGS += -Os -DNDEBUG
 CFLAGS += -fdata-sections -ffunction-sections
@@ -68,6 +69,7 @@ SRC_C += $(SRC_MOD)
 
 SRC_CXX += $(SRC_MOD_CXX)
 
+SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c
 SRC_QSTR += $(SRC_MOD) $(SRC_MOD_CXX)
 
 OBJ += $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o))
@@ -79,7 +81,7 @@ else
 all: $(BUILD)/firmware.elf
 endif
 
-$(BUILD)/_frozen_mpy.c: frozentest.mpy $(BUILD)/genhdr/qstrdefs.generated.h
+$(BUILD)/_frozen_mpy.c: $(TOP)/tests/frozen/frozentest.mpy $(BUILD)/genhdr/qstrdefs.generated.h
 	$(ECHO) "MISC freezing bytecode"
 	$(Q)$(TOP)/tools/mpy-tool.py -f -q $(BUILD)/genhdr/qstrdefs.preprocessed.h -mlongint-impl=none $< > $@
 
@@ -101,12 +103,11 @@ deploy: $(BUILD)/firmware.dfu
 
 # Run emulation build on a POSIX system with suitable terminal settings
 run:
-	stty raw opost -echo
-	build/firmware.elf
-	@echo Resetting terminal...
-# This sleep is useful to spot segfaults
-	sleep 1
-	reset
+	@saved_=`stty -g`; \
+	  stty raw opost -echo; \
+	  $(BUILD)/firmware.elf; \
+	  echo "Exit status: $$?"; \
+	  stty $$saved_
 
 test: $(BUILD)/firmware.elf
 	$(Q)/bin/echo -e "print('hello world!', list(x+1 for x in range(10)), end='eol\\\\n')\\r\\n\\x04" | $(BUILD)/firmware.elf | tail -n2 | grep "^hello world! \\[1, 2, 3, 4, 5, 6, 7, 8, 9, 10\\]eol"

@@ -159,7 +159,7 @@ STATIC void do_load_from_lexer(mp_module_context_t *context, mp_lexer_t *lex) {
 #endif
 
 #if (MICROPY_HAS_FILE_READER && MICROPY_PERSISTENT_CODE_LOAD) || MICROPY_MODULE_FROZEN_MPY
-STATIC void do_execute_raw_code(mp_module_context_t *context, const mp_raw_code_t *rc, const mp_module_context_t *mc, const char *source_name) {
+STATIC void do_execute_raw_code(const mp_module_context_t *context, const mp_raw_code_t *rc, const char *source_name) {
     (void)source_name;
 
     #if MICROPY_PY___FILE__
@@ -179,7 +179,7 @@ STATIC void do_execute_raw_code(mp_module_context_t *context, const mp_raw_code_
 
     nlr_buf_t nlr;
     if (nlr_push(&nlr) == 0) {
-        mp_obj_t module_fun = mp_make_function_from_raw_code(rc, mc, NULL);
+        mp_obj_t module_fun = mp_make_function_from_raw_code(rc, context, NULL);
         mp_call_function_0(module_fun);
 
         // finish nlr block, restore context
@@ -224,7 +224,7 @@ STATIC void do_load(mp_module_context_t *module_obj, vstr_t *file) {
         if (frozen_type == MP_FROZEN_MPY) {
             const mp_frozen_module_t *frozen = modref;
             module_obj->constants = frozen->constants;
-            do_execute_raw_code(module_obj, frozen->rc, module_obj, file_str + frozen_path_prefix_len);
+            do_execute_raw_code(module_obj, frozen->rc, file_str + frozen_path_prefix_len);
             return;
         }
         #endif
@@ -237,7 +237,7 @@ STATIC void do_load(mp_module_context_t *module_obj, vstr_t *file) {
     #if MICROPY_HAS_FILE_READER && MICROPY_PERSISTENT_CODE_LOAD
     if (file_str[file->len - 3] == 'm') {
         mp_compiled_module_t cm = mp_raw_code_load_file(file_str, module_obj);
-        do_execute_raw_code(module_obj, cm.rc, cm.context, file_str);
+        do_execute_raw_code(cm.context, cm.rc, file_str);
         return;
     }
     #endif
@@ -467,7 +467,7 @@ STATIC mp_obj_t process_import_at_level(qstr full_mod_name, qstr level_mod_name,
     return module_obj;
 }
 
-mp_obj_t mp_builtin___import__(size_t n_args, const mp_obj_t *args) {
+mp_obj_t mp_builtin___import___default(size_t n_args, const mp_obj_t *args) {
     #if DEBUG_PRINT
     DEBUG_printf("__import__:\n");
     for (size_t i = 0; i < n_args; i++) {
@@ -566,7 +566,7 @@ mp_obj_t mp_builtin___import__(size_t n_args, const mp_obj_t *args) {
 
 #else // MICROPY_ENABLE_EXTERNAL_IMPORT
 
-mp_obj_t mp_builtin___import__(size_t n_args, const mp_obj_t *args) {
+mp_obj_t mp_builtin___import___default(size_t n_args, const mp_obj_t *args) {
     // Check that it's not a relative import
     if (n_args >= 5 && MP_OBJ_SMALL_INT_VALUE(args[4]) != 0) {
         mp_raise_NotImplementedError(MP_ERROR_TEXT("relative import"));
