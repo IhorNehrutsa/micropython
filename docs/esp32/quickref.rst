@@ -150,7 +150,7 @@ These are working configurations for LAN interfaces of popular boards::
 
     # or with dynamic ref_clk pin configuration
 
-    lan = network.LAN(mdc=machine.Pin(23), mdio=machine.Pin(18), power=machine.Pin(5), 
+    lan = network.LAN(mdc=machine.Pin(23), mdio=machine.Pin(18), power=machine.Pin(5),
                       phy_type=network.PHY_LAN8720, phy_addr=0,
                       ref_clk=machine.Pin(17), ref_clk_mode=machine.Pin.OUT)
 
@@ -322,6 +322,10 @@ Use the :ref:`machine.PWM <machine.PWM>` class::
 
     pwm2 = PWM(Pin(2), freq=20000, duty=512)  # create and configure in one go
     print(pwm2)                               # view PWM settings
+    pwm2.deinit()                             # turn off PWM on the pin
+
+    pwm0 = PWM(Pin(0), duty_u16=16384)            # The output is at a high level 25% of the time.
+    pwm2 = PWM(Pin(2), duty_u16=16384, invert=1)  # The output is at a low level 25% of the time.
 
 ESP chips have different hardware peripherals:
 

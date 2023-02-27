@@ -109,6 +109,7 @@ STATIC bool pwm_inited = false;
 typedef struct _machine_pwm_obj_t {
     mp_obj_base_t base;
     gpio_num_t pin;
+    uint8_t output_invert;
     bool active;
     int mode;
     int channel;
@@ -200,6 +201,7 @@ STATIC void configure_channel(machine_pwm_obj_t *self) {
         .intr_type = LEDC_INTR_DISABLE,
         .speed_mode = self->mode,
         .timer_sel = self->timer,
+        .flags.output_invert = self->output_invert,
     };
     if (ledc_channel_config(&cfg) != ESP_OK) {
         mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("PWM not supported on Pin(%d)"), self->pin);
@@ -459,6 +461,9 @@ STATIC void mp_machine_pwm_print(const mp_print_t *print, mp_obj_t self_in, mp_p
         } else {
             mp_printf(print, ", duty_u16=%d", get_duty_u16(self));
         }
+        if (self->output_invert) {
+            mp_printf(print, ", invert=%d", self->output_invert);
+        }
         int resolution = timers[TIMER_IDX(self->mode, self->timer)].duty_resolution;
         mp_printf(print, ", resolution=%d", resolution);
 
@@ -472,13 +477,14 @@ STATIC void mp_machine_pwm_print(const mp_print_t *print, mp_obj_t self_in, mp_p
 // This called from pwm.init() method
 STATIC void mp_machine_pwm_init_helper(machine_pwm_obj_t *self,
     size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
-    enum { ARG_freq, ARG_duty, ARG_duty_u16, ARG_duty_ns };
+    enum { ARG_freq, ARG_duty, ARG_duty_u16, ARG_duty_ns, ARG_invert};
     static const mp_arg_t allowed_args[] = {
 //      { MP_QSTR_freq, MP_ARG_REQUIRED | MP_ARG_INT, {.u_int = -1} },
         { MP_QSTR_freq, MP_ARG_INT, {.u_int = -1} },
         { MP_QSTR_duty, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = -1} },
         { MP_QSTR_duty_u16, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = -1} },
         { MP_QSTR_duty_ns, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = -1} },
+        { MP_QSTR_invert, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 0}},
     };
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all(n_args, pos_args, kw_args,
@@ -549,6 +555,7 @@ STATIC void mp_machine_pwm_init_helper(machine_pwm_obj_t *self,
     self->mode = mode;
     self->timer = TIMER_IDX_TO_TIMER(timer_idx);
     self->channel = CHANNEL_IDX_TO_CHANNEL(channel_idx);
+    self->output_invert = args[ARG_invert].u_int == 0 ? 0 : 1;
 
     // New PWM assignment
     if ((chans[channel_idx].pin == -1) || (chans[channel_idx].timer_idx != timer_idx)) {
