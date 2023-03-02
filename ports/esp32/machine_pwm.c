@@ -35,10 +35,8 @@
 #include "driver/ledc.h"
 #include "esp_err.h"
 
-#include "py/mpprint.h"
 //#define PWM_DBG(...)
 #define PWM_DBG(...) mp_printf(MP_PYTHON_PRINTER, __VA_ARGS__); mp_printf(&mp_plat_print, "\n");
-//#define MP_PRN_LEVEL 1000
 
 // Total number of channels
 #define PWM_CHANNEL_MAX (LEDC_SPEED_MODE_MAX * LEDC_CHANNEL_MAX)
@@ -50,7 +48,6 @@ typedef struct _chan_t {
     // Which channel has which timer assigned?
     // (-1 if not assigned)
     int timer;
-    // int32_t freq;
 } chan_t;
 
 // List of PWM channels
@@ -99,13 +96,8 @@ STATIC bool pwm_inited = false;
 // MicroPython PWM object struct
 typedef struct _machine_pwm_obj_t {
     mp_obj_base_t base;
-    bool active;
     gpio_num_t pin;
-    /*
-    ledc_mode_t mode;
-    ledc_channel_t channel;
-    ledc_timer_t timer;
-    */
+    bool active;
     int mode;
     int channel;
     int timer;
@@ -200,7 +192,6 @@ STATIC void pwm_deinit(int mode, int channel) {
         }
         chans[mode][channel].pin = -1;
         chans[mode][channel].timer = -1;
-        //chans[mode][channel].freq = -1;
     }
 }
 
