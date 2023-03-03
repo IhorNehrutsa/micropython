@@ -71,7 +71,7 @@ low all of the time.
         if f >= F_MAX or f <= F_MIN:
             delta_f = -delta_f
 
-  See PWM wave at Pin(5) with an oscilloscope.
+  See PWM wave on Pin(5) with an oscilloscope.
 
 * Example of a smooth duty change::
 
@@ -99,7 +99,50 @@ low all of the time.
             duty_u16 = 0
             delta_d = -delta_d
 
-  See PWM wave at Pin(5) with an oscilloscope.
+  See PWM wave on Pin(5) with an oscilloscope.
+
+* Example of a smooth duty change and PWM output invertion::
+
+    from utime import sleep
+    from machine import Pin, PWM
+
+    try:
+        DUTY_MAX = 2**16 - 1
+
+        duty_u16 = 0
+        delta_d = 2**16 // 32
+
+        pwm = PWM(Pin(27), 5000)
+        pwmi = PWM(Pin(32), 5000, invert=1)
+
+        while True:
+            pwm.duty_u16(duty_u16)
+            pwmi.duty_u16(duty_u16)
+
+            duty_u16 += delta_d
+            if duty_u16 >= DUTY_MAX:
+                duty_u16 = DUTY_MAX
+                delta_d = -delta_d
+            elif duty_u16 <= 0:
+                duty_u16 = 0
+                delta_d = -delta_d
+
+            sleep(.01)
+            print(pwm)
+            print(pwmi)
+
+    finally:
+        try:
+            pwm.deinit()
+        except:
+            pass
+        try:
+            pwmi.deinit()
+        except:
+            pass
+
+  See PWM waves on `Pin(27) and Pin(32) <https://user-images.githubusercontent.com/70886343/222743883-dca25aa8-681d-471c-933a-6f9beacb6eee.mp4>`_ with an oscilloscope.
+
 
 Note: the Pin.OUT mode does not need to be specified.  The channel is initialized
 to PWM mode internally once for each Pin that is passed to the PWM constructor.
