@@ -141,6 +141,17 @@ low all of the time.
         except:
             pass
 
+  Output is::
+
+    ...
+    PWM(Pin(27), freq=5000, duty_u16=24576)  # resolution=13, (duty=37.50%, resolution=0.012%), mode=0, channel=0, timer=0
+    PWM(Pin(32), freq=5000, duty_u16=24576, invert=1)  # resolution=13, (duty=37.50%, resolution=0.012%), mode=0, channel=1, timer=0
+    PWM(Pin(27), freq=5000, duty_u16=26624)  # resolution=13, (duty=40.63%, resolution=0.012%), mode=0, channel=0, timer=0
+    PWM(Pin(32), freq=5000, duty_u16=26624, invert=1)  # resolution=13, (duty=40.63%, resolution=0.012%), mode=0, channel=1, timer=0
+    PWM(Pin(27), freq=5000, duty_u16=28672)  # resolution=13, (duty=43.75%, resolution=0.012%), mode=0, channel=0, timer=0
+    PWM(Pin(32), freq=5000, duty_u16=28672, invert=1)  # resolution=13, (duty=43.75%, resolution=0.012%), mode=0, channel=1, timer=0
+    ...
+
   See PWM waves on `Pin(27) and Pin(32) <https://user-images.githubusercontent.com/70886343/222743883-dca25aa8-681d-471c-933a-6f9beacb6eee.mp4>`_ with an oscilloscope.
 
 
