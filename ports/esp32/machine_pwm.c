@@ -495,7 +495,7 @@ in the current mode, otherwise in the next mode.
 If the mode is changed, release the channel and select a new channel in the next mode.
 Then set the frequency with the same duty.
 */
-STATIC void select_a_timer(machine_pwm_obj_t *self, unsigned int freq) {
+STATIC void select_a_timer(machine_pwm_obj_t *self, int freq) {
     PWM_DBG("select_a_timer(freq=%d mode=%d)", freq, self->mode)
     if ((freq <= 0) || (freq > 40000000)) {
         mp_raise_ValueError(MP_ERROR_TEXT("frequency must be from 1Hz to 40MHz"));
@@ -654,16 +654,20 @@ STATIC void mp_machine_pwm_init_helper(machine_pwm_obj_t *self,
 
     int freq = args[ARG_freq].u_int;
     // Check if freq wasn't passed as an argument
+    PWM_DBG("zzz")
     if (freq < 0) {
+        PWM_DBG("xxx")
         // Check if already set, otherwise use the default freq.
         // It is possible in case:
         // pwm = PWM(pin, freq=1000, duty=256)
         // pwm = PWM(pin, duty=128)
         if (chans[mode][channel].timer >= 0) {
             freq = timers[mode][chans[mode][channel].timer].freq_hz;
+            PWM_DBG("ccc")
         }
         if (freq <= 0) {
             freq = PWM_FREQ;
+            PWM_DBG("vvv")
         }
     }
     self->channel = channel;
