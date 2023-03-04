@@ -230,8 +230,10 @@ STATIC void configure_channel(machine_pwm_obj_t *self) {
     check_esp_err(ledc_channel_config(&cfg));
 }
 
-STATIC void pwm_is_active(machine_pwm_obj_t *self) {
-    if (self->active == false) {
+#define pwm_is_active(self) PWM_DBG("%s %d %s", __FUNCTION__, __LINE__, __FILE__); pwm_is_active_(self);
+
+STATIC void pwm_is_active_(machine_pwm_obj_t *self) {
+    if (!self->active) {
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("PWM is inactive"));
     }
 }
@@ -257,7 +259,6 @@ STATIC int duty_to_ns(machine_pwm_obj_t *self, int duty) {
 #define get_duty_raw(self) ledc_get_duty(self->mode, self->channel)
 
 STATIC uint32_t get_duty_u16(machine_pwm_obj_t *self) {
-    pwm_is_active(self);
     int resolution = timers[self->mode][self->timer].duty_resolution;
     int duty = ledc_get_duty(self->mode, self->channel);
     if (resolution <= UI_RES_16_BIT) {
@@ -269,17 +270,14 @@ STATIC uint32_t get_duty_u16(machine_pwm_obj_t *self) {
 }
 
 STATIC uint32_t get_duty_u10(machine_pwm_obj_t *self) {
-    pwm_is_active(self);
     return get_duty_u16(self) >> 6; // Scale down from 16 bit to 10 bit resolution
 }
 
 STATIC uint32_t get_duty_ns(machine_pwm_obj_t *self) {
-    pwm_is_active(self);
     return duty_to_ns(self, get_duty_u16(self));
 }
 
 STATIC void set_duty_u16(machine_pwm_obj_t *self, int duty) {
-    pwm_is_active(self);
     if ((duty < 0) || (duty > UI_MAX_DUTY)) {
         mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("duty_u16 must be from 0 to %d"), UI_MAX_DUTY);
     }
@@ -319,7 +317,6 @@ STATIC void set_duty_u16(machine_pwm_obj_t *self, int duty) {
 }
 
 STATIC void set_duty_u10(machine_pwm_obj_t *self, int duty) {
-    pwm_is_active(self);
     if ((duty < 0) || (duty > MAX_DUTY_U10)) {
         mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("duty must be from 0 to %u"), MAX_DUTY_U10);
     }
@@ -329,13 +326,22 @@ STATIC void set_duty_u10(machine_pwm_obj_t *self, int duty) {
 }
 
 STATIC void set_duty_ns(machine_pwm_obj_t *self, int ns) {
-    pwm_is_active(self);
     if ((ns < 0) || (ns > duty_to_ns(self, UI_MAX_DUTY))) {
         mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("duty_ns must be from 0 to %d ns"), duty_to_ns(self, UI_MAX_DUTY));
     }
     set_duty_u16(self, ns_to_duty(self, ns));
     self->duty_x = -HIGHEST_PWM_RES;
     self->duty = ns;
+}
+
+STATIC void set_duty(machine_pwm_obj_t *self) {
+    if (self->duty_x == HIGHEST_PWM_RES) {
+        set_duty_u16(self, self->duty);
+    } else if (self->duty_x == PWM_RES_10_BIT) {
+        set_duty_u10(self, self->duty);
+    } else if (self->duty_x == -HIGHEST_PWM_RES) {
+        set_duty_ns(self, self->duty);
+    }
 }
 
 // Set timer frequency
@@ -387,17 +393,8 @@ STATIC void set_freq(machine_pwm_obj_t *self, unsigned int freq) {
         }
         #endif
 
-
-        self->active = true;
-
         // Save the same duty cycle when frequency is changed
-        if (self->duty_x == HIGHEST_PWM_RES) {
-            set_duty_u16(self, self->duty);
-        } else if (self->duty_x == PWM_RES_10_BIT) {
-            set_duty_u10(self, self->duty);
-        } else if (self->duty_x == -HIGHEST_PWM_RES) {
-            set_duty_ns(self, self->duty);
-        }
+        set_duty(self);
 
         // Set frequency
         check_esp_err(ledc_timer_config(timer));
@@ -405,6 +402,8 @@ STATIC void set_freq(machine_pwm_obj_t *self, unsigned int freq) {
         if (self->mode == LEDC_LOW_SPEED_MODE) {
             check_esp_err(ledc_timer_rst(self->mode, self->timer));
         }
+    } else {
+        set_duty(self);
     }
 }
 
@@ -692,6 +691,8 @@ STATIC void mp_machine_pwm_init_helper(machine_pwm_obj_t *self,
     register_channel(self->mode, self->channel, self->pin, self->timer);
 
     set_freq(self, freq);
+
+    self->active = true;
 }
 
 // This called from PWM() constructor
@@ -751,25 +752,31 @@ STATIC void mp_machine_pwm_freq_set(machine_pwm_obj_t *self, mp_int_t freq) {
 }
 
 STATIC mp_obj_t mp_machine_pwm_duty_get(machine_pwm_obj_t *self) {
+    pwm_is_active(self);
     return MP_OBJ_NEW_SMALL_INT(get_duty_u10(self));
 }
 
 STATIC void mp_machine_pwm_duty_set(machine_pwm_obj_t *self, mp_int_t duty) {
+    pwm_is_active(self);
     set_duty_u10(self, duty);
 }
 
 STATIC mp_obj_t mp_machine_pwm_duty_get_u16(machine_pwm_obj_t *self) {
+    pwm_is_active(self);
     return MP_OBJ_NEW_SMALL_INT(get_duty_u16(self));
 }
 
 STATIC void mp_machine_pwm_duty_set_u16(machine_pwm_obj_t *self, mp_int_t duty) {
+    pwm_is_active(self);
     set_duty_u16(self, duty);
 }
 
 STATIC mp_obj_t mp_machine_pwm_duty_get_ns(machine_pwm_obj_t *self) {
+    pwm_is_active(self);
     return MP_OBJ_NEW_SMALL_INT(get_duty_ns(self));
 }
 
 STATIC void mp_machine_pwm_duty_set_ns(machine_pwm_obj_t *self, mp_int_t duty) {
+    pwm_is_active(self);
     set_duty_ns(self, duty);
 }
