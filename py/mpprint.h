@@ -79,6 +79,9 @@ int mp_printf(const mp_print_t *print, const char *fmt, ...);
 int mp_vprintf(const mp_print_t *print, const char *fmt, va_list args);
 #endif
 
+#endif // MICROPY_INCLUDED_PY_MPPRINT_H
+
+#if defined(MP_PRN_LEVEL) && (MP_PRN_LEVEL > 0)
 // Debug messages during code developing with MP_PRN(level, ...) & MP_PRN_LEVEL.
 // An approximate hierarchy of debug levels MP_PRN_LEVEL is:
 #define MP_PRN_SUPPRESS 0 // SUPPRESS all messages. Use it in the release version.
@@ -89,13 +92,17 @@ int mp_vprintf(const mp_print_t *print, const char *fmt, va_list args);
 #define MP_PRN_DEBUG 5 // DEBUG, more detailed information, dig deeper.
 #define MP_PRN_TRACE 6 // TRACE, show a flow of the algorithm, like enter/exit a function.
 // In reality, you may use your own classification of debug levels.
-#if defined(MP_PRN_LEVEL) && (MP_PRN_LEVEL > 0)
+
+#if defined(MP_PRN)
+#undef MP_PRN
+#endif
+
 #define MP_PRN(level, ...) \
     do { \
         if ((0 < level) && (level <= MP_PRN_LEVEL)) { \
-            mp_printf(MP_PYTHON_PRINTER, " %d|| ", level); \
+            mp_printf(MP_PYTHON_PRINTER, " %d || ", level); \
             mp_printf(MP_PYTHON_PRINTER, __VA_ARGS__); \
-            mp_printf(MP_PYTHON_PRINTER, " ||%d %s\n", __LINE__, __FILE__); \
+            mp_printf(MP_PYTHON_PRINTER, " || %d %s\n", __LINE__, __FILE__); \
         } \
     } while (0);
 #else
@@ -132,5 +139,3 @@ void foo() {
 #define DEBUG_printf(...)
 #endif
 #endif
-
-#endif // MICROPY_INCLUDED_PY_MPPRINT_H

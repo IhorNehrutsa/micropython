@@ -29,14 +29,19 @@
 
 #include <math.h>
 
+#define MP_PRN_LEVEL 100 // show all messages
+#include "py/mpprint.h"
+
 #include "py/runtime.h"
 #include "py/mphal.h"
 
 #include "driver/ledc.h"
+#include "soc/soc_caps.h"
 #include "esp_err.h"
 
-#define PWM_DBG(...)
-//#define PWM_DBG(...) mp_printf(MP_PYTHON_PRINTER, __VA_ARGS__); mp_printf(&mp_plat_print, "\n");
+
+//#define PWM_DBG(...)
+#define PWM_DBG(...) mp_printf(MP_PYTHON_PRINTER, __VA_ARGS__); mp_printf(&mp_plat_print, "\n");
 
 // Total number of channels
 #define PWM_CHANNEL_MAX (LEDC_SPEED_MODE_MAX * LEDC_CHANNEL_MAX)
@@ -73,17 +78,16 @@ STATIC ledc_timer_config_t timers[LEDC_SPEED_MODE_MAX][LEDC_TIMER_MAX];
 // duty_u16() and duty_ns() use 16-bit resolution or less
 
 // Possible highest resolution in device
-#if (LEDC_TIMER_BIT_MAX - 1) < LEDC_TIMER_16_BIT
+#if SOC_LEDC_TIMER_BIT_WIDE_NUM < 16
 #define HIGHEST_PWM_RES (LEDC_TIMER_BIT_MAX - 1)
 #else
 #define HIGHEST_PWM_RES (LEDC_TIMER_16_BIT) // 20 bit for ESP32, but 16 bit is used
 #endif
+
 // Duty resolution of user interface in `duty_u16()` and `duty_u16` parameter in constructor/initializer
 #define UI_RES_16_BIT (16)
 // Maximum duty value on highest user interface resolution
 #define UI_MAX_DUTY ((1 << UI_RES_16_BIT) - 1)
-// How much to shift from the HIGHEST_PWM_RES duty resolution to the user interface duty resolution UI_RES_16_BIT
-#define UI_RES_SHIFT (UI_RES_16_BIT - HIGHEST_PWM_RES) // 0 for ESP32, 2 for S2, S3, C3
 
 #if SOC_LEDC_SUPPORT_REF_TICK
 // If the PWM frequency is less than EMPIRIC_FREQ, then LEDC_REF_CLK_HZ(1 MHz) source is used, else LEDC_APB_CLK_HZ(80 MHz) source is used
@@ -119,7 +123,7 @@ STATIC void unregister_channel(int mode, int channel) {
 }
 
 STATIC void pwm_init(void) {
-    PWM_DBG("pwm_init()");
+    MP_PRN(MP_PRN_TRACE, "pwm_init()");
     // Initial condition: no channels assigned
 
     for (int mode = 0; mode < LEDC_SPEED_MODE_MAX; ++mode) {
@@ -167,7 +171,7 @@ STATIC int timer_used(int mode, int timer) {
 
 // Deinit channel and timer if the timer is unused, detach pin
 STATIC void pwm_deinit(int mode, int channel) {
-    PWM_DBG("pwm_deinit(mode%d, channel=%d)", mode, channel);
+    MP_PRN(MP_PRN_TRACE, "pwm_deinit(mode%d, channel=%d)", mode, channel);
     // Is valid channel?
     if ((mode >= 0) && (mode < LEDC_SPEED_MODE_MAX) && (channel >= 0) && (channel < LEDC_CHANNEL_MAX)) {
         // Clean up timer if necessary
@@ -217,7 +221,7 @@ void machine_pwm_deinit_all(void) {
 STATIC void configure_channel(machine_pwm_obj_t *self) {
     ledc_channel_config_t cfg = {
         .channel = self->channel,
-        .duty = (1 << timers[self->mode][self->timer].duty_resolution) / 2,
+        .duty = (1 << timers[self->mode][self->timer].duty_resolution) / 2, // 50%
         .gpio_num = self->pin,
         .intr_type = LEDC_INTR_DISABLE,
         .speed_mode = self->mode,
@@ -226,11 +230,11 @@ STATIC void configure_channel(machine_pwm_obj_t *self) {
         .flags.output_invert = self->output_invert,
         #endif
     };
-    PWM_DBG("configure_channel() %d %d %u %u %d %d %d", timers[self->mode][self->timer].duty_resolution, self->channel, cfg.duty, (1 << (timers[self->mode][self->timer].duty_resolution)) / 2, self->pin, self->mode, self->timer);
+    PWM_DBG("configure_channel() dr=%d c=%d d=%u %u p=%d m=%d t=%d HIGHEST_PWM_RES=%d", timers[self->mode][self->timer].duty_resolution, self->channel, cfg.duty, (1 << (timers[self->mode][self->timer].duty_resolution)) / 2, self->pin, self->mode, self->timer, HIGHEST_PWM_RES);
     check_esp_err(ledc_channel_config(&cfg));
 }
 
-#define pwm_is_active(self) PWM_DBG("%s %d %s", __FUNCTION__, __LINE__, __FILE__); pwm_is_active_(self);
+#define pwm_is_active(self) { MP_PRN(MP_PRN_INFO, "%s %d %s", __FUNCTION__, __LINE__, __FILE__); pwm_is_active_(self); }
 
 STATIC void pwm_is_active_(machine_pwm_obj_t *self) {
     if (!self->active) {
@@ -259,6 +263,7 @@ STATIC int duty_to_ns(machine_pwm_obj_t *self, int duty) {
 #define get_duty_raw(self) ledc_get_duty(self->mode, self->channel)
 
 STATIC uint32_t get_duty_u16(machine_pwm_obj_t *self) {
+    /*
     int resolution = timers[self->mode][self->timer].duty_resolution;
     int duty = ledc_get_duty(self->mode, self->channel);
     if (resolution <= UI_RES_16_BIT) {
@@ -267,10 +272,16 @@ STATIC uint32_t get_duty_u16(machine_pwm_obj_t *self) {
         duty >>= (resolution - UI_RES_16_BIT);
     }
     return duty;
+    */
+    #if UI_RES_16_BIT > HIGHEST_PWM_RES
+    return ledc_get_duty(self->mode, self->channel) << (UI_RES_16_BIT - HIGHEST_PWM_RES);
+    #else
+    return ledc_get_duty(self->mode, self->channel) << (HIGHEST_PWM_RES - UI_RES_16_BIT);
+    #endif
 }
 
 STATIC uint32_t get_duty_u10(machine_pwm_obj_t *self) {
-    return get_duty_u16(self) >> 6; // Scale down from 16 bit to 10 bit resolution
+    return get_duty_u16(self) >> (UI_RES_16_BIT - PWM_RES_10_BIT); // Scale down from 16 bit to 10 bit resolution
 }
 
 STATIC uint32_t get_duty_ns(machine_pwm_obj_t *self) {
@@ -281,6 +292,7 @@ STATIC void set_duty_u16(machine_pwm_obj_t *self, int duty) {
     if ((duty < 0) || (duty > UI_MAX_DUTY)) {
         mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("duty_u16 must be from 0 to %d"), UI_MAX_DUTY);
     }
+    /*
     ledc_timer_config_t timer = timers[self->mode][self->timer];
     int channel_duty;
     if (timer.duty_resolution <= UI_RES_16_BIT) {
@@ -294,6 +306,12 @@ STATIC void set_duty_u16(machine_pwm_obj_t *self, int duty) {
     } else if (channel_duty > max_duty) {
         channel_duty = max_duty;
     }
+    */
+    #if UI_RES_16_BIT > HIGHEST_PWM_RES
+    int channel_duty = duty >> (UI_RES_16_BIT - HIGHEST_PWM_RES);
+    #else
+    int channel_duty = duty << (HIGHEST_PWM_RES - UI_RES_16_BIT);
+    #endif
     check_esp_err(ledc_set_duty(self->mode, self->channel, channel_duty));
     check_esp_err(ledc_update_duty(self->mode, self->channel));
     // A thread-safe version of API is ledc_set_duty_and_update
@@ -303,13 +321,16 @@ STATIC void set_duty_u16(machine_pwm_obj_t *self, int duty) {
     // Not a bug. It's a feature. The duty is applied at the beginning of the next signal period.
     // Bug: It has been experimentally established that the duty is setted during 2 signal periods, but 1 period is expected.
     // See https://github.com/espressif/esp-idf/issues/7288
+    #if MP_PRN_LEVEL >= MP_PRN_WARNING
+    ledc_timer_config_t timer = timers[self->mode][self->timer];
     if (duty != get_duty_u16(self)) {
-        PWM_DBG("set_duty_u16(%u), get_duty_u16():%u, channel_duty:%d, duty_resolution:%d, freq_hz:%d", duty, get_duty_u16(self), channel_duty, timer.duty_resolution, timer.freq_hz);
+        MP_PRN(MP_PRN_WARNING, "set_duty_u16(%u), get_duty_u16():%u, duty:%d, duty_resolution:%d, freq_hz:%d", duty, get_duty_u16(self), duty, timer.duty_resolution, timer.freq_hz);
         ets_delay_us(2 * 1000000 / timer.freq_hz);
         if (duty != get_duty_u16(self)) {
-            PWM_DBG("set_duty_u16(%u), get_duty_u16():%u, channel_duty:%d, duty_resolution:%d, freq_hz:%d", duty, get_duty_u16(self), channel_duty, timer.duty_resolution, timer.freq_hz);
+            MP_PRN(MP_PRN_WARNING, "set_duty_u16(%u), get_duty_u16():%u, duty:%d, duty_resolution:%d, freq_hz:%d", duty, get_duty_u16(self), duty, timer.duty_resolution, timer.freq_hz);
         }
     }
+    #endif
     /**/
 
     self->duty_x = HIGHEST_PWM_RES;
@@ -409,7 +430,7 @@ STATIC void set_freq(machine_pwm_obj_t *self, unsigned int freq) {
 
 // Find a free PWM channel, also spot if our pin is already mentioned.
 STATIC int find_channel(int mode, int pin) {
-    PWM_DBG("find_channel(mode=%d pin=%d)", mode, pin)
+    MP_PRN(MP_PRN_TRACE, "find_channel(mode=%d pin=%d)", mode, pin)
     int avail_channel = -1;
     for (int channel = 0; channel < LEDC_CHANNEL_MAX; ++channel) {
         if (chans[mode][channel].pin == pin) {
@@ -423,7 +444,7 @@ STATIC int find_channel(int mode, int pin) {
 }
 
 STATIC int find_new_channel(machine_pwm_obj_t *self) {
-    PWM_DBG("find_new_channel()")
+    MP_PRN(MP_PRN_TRACE, "find_new_channel()")
     int channel = -1;
     for (int mode = 0; mode < LEDC_SPEED_MODE_MAX; ++mode) {
         ////if (is_free_channel(mode)) {
@@ -441,7 +462,7 @@ STATIC int find_new_channel(machine_pwm_obj_t *self) {
 }
 
 STATIC int find_free_timer_in_mode(machine_pwm_obj_t *self, int check_mode) {
-    PWM_DBG("find_free_timer_in_mode(%d)", check_mode)
+    MP_PRN(MP_PRN_TRACE, "find_free_timer_in_mode(%d)", check_mode)
     for (int mode = 0; mode < LEDC_SPEED_MODE_MAX; ++mode) {
         if ((check_mode < 0) || is_free_channel(check_mode, self->pin)) {
             for (int timer = 0; timer < LEDC_TIMER_MAX; ++timer) {
@@ -459,7 +480,7 @@ STATIC int find_free_timer_in_mode(machine_pwm_obj_t *self, int check_mode) {
 
 // Return timer with the same mode and frequency
 STATIC int find_timer(int mode, unsigned int freq) {
-    PWM_DBG("find_timer(mode=%d freq=%d)", mode, freq)
+    MP_PRN(MP_PRN_TRACE, "find_timer(mode=%d freq=%d)", mode, freq)
     for (int timer = 0; timer < LEDC_TIMER_MAX; ++timer) {
         if (timers[mode][timer].freq_hz == freq) {
             return timer;
@@ -474,7 +495,7 @@ If the mode is changed, release the channel and select a new channel in the next
 Then set the frequency with the same duty.
 */
 STATIC void select_a_timer(machine_pwm_obj_t *self, int freq) {
-    PWM_DBG("select_a_timer(freq=%d mode=%d)", freq, self->mode)
+    MP_PRN(MP_PRN_TRACE, "select_a_timer(freq=%d mode=%d)", freq, self->mode)
     if ((freq <= 0) || (freq > 40000000)) {
         mp_raise_ValueError(MP_ERROR_TEXT("frequency must be from 1Hz to 40MHz"));
     }
@@ -644,20 +665,16 @@ STATIC void mp_machine_pwm_init_helper(machine_pwm_obj_t *self,
 
     int freq = args[ARG_freq].u_int;
     // Check if freq wasn't passed as an argument
-    PWM_DBG("zzz m=%d c=%d", mode, channel)
     if ((freq < 0) && (mode >= 0) && (channel >= 0)) {
-        PWM_DBG("xxx %d", freq)
         // Check if already set, otherwise use the default freq.
         // It is possible in case:
         // pwm = PWM(pin, freq=1000, duty=256)
         // pwm = PWM(pin, duty=128)
         if (chans[mode][channel].timer >= 0) {
             freq = timers[mode][chans[mode][channel].timer].freq_hz;
-            PWM_DBG("ccc f=%d f=%u t=%d", freq, timers[mode][chans[mode][channel].timer].freq_hz, chans[mode][channel].timer)
         }
         if (freq <= 0) {
             freq = PWM_FREQ;
-            PWM_DBG("vvv %d", freq)
         }
     }
 
