@@ -329,16 +329,17 @@ Use the :ref:`machine.PWM <machine.PWM>` class::
 
 ESP chips have different hardware peripherals:
 
-=====================================================  ========  ========  ========
-Hardware specification                                    ESP32  ESP32-S2  ESP32-C3
------------------------------------------------------  --------  --------  --------
-Number of groups (speed modes)                                2         1         1
-Number of timers per group                                    4         4         4
-Number of channels per group                                  8         8         6
------------------------------------------------------  --------  --------  --------
-Different PWM frequencies (groups * timers)                   8         4         4
-Total PWM channels (Pins, duties) (groups * channels)        16         8         6
-=====================================================  ========  ========  ========
+=======================================================  ========  ========  ========
+Hardware specification                                      ESP32  ESP32-S2  ESP32-C3
+                                                                   ESP32-S3  ESP32-H2
+-------------------------------------------------------  --------  --------  --------
+Number of groups (speed modes)                                  2         1         1
+Number of timers per group                                      4         4         4
+Number of channels per group                                    8         8         6
+-------------------------------------------------------  --------  --------  --------
+Different PWM frequencies = (groups * timers)                   8         4         4
+Total PWM channels (Pins, duties) = (groups * channels)        16         8         6
+=======================================================  ========  ========  ========
 
 A maximum number of PWM channels (Pins) are available on the ESP32 - 16 channels,
 but only 8 different PWM frequencies are available, the remaining 8 channels must

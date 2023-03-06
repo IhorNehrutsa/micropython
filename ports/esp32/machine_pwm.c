@@ -35,8 +35,8 @@
 #include "py/runtime.h"
 #include "py/mphal.h"
 
-#include "driver/ledc.h"
 #include "soc/soc_caps.h"
+#include "driver/ledc.h"
 #include "esp_err.h"
 
 
@@ -77,17 +77,32 @@ STATIC ledc_timer_config_t timers[LEDC_SPEED_MODE_MAX][LEDC_TIMER_MAX];
 // duty() uses 10-bit resolution or less
 // duty_u16() and duty_ns() use 16-bit resolution or less
 
+// Duty resolution of user interface in `duty_u16()` and `duty_u16` parameter in constructor/initializer
+#define UI_RES_16_BIT (16)
+// Maximum duty value on highest user interface resolution
+#define UI_MAX_DUTY ((1 << UI_RES_16_BIT) - 1)
+
 // Possible highest resolution in device
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 0)
+
 #if SOC_LEDC_TIMER_BIT_WIDE_NUM < 16
 #define HIGHEST_PWM_RES (LEDC_TIMER_BIT_MAX - 1)
 #else
 #define HIGHEST_PWM_RES (LEDC_TIMER_16_BIT) // 20 bit for ESP32, but 16 bit is used
 #endif
 
-// Duty resolution of user interface in `duty_u16()` and `duty_u16` parameter in constructor/initializer
-#define UI_RES_16_BIT (16)
-// Maximum duty value on highest user interface resolution
-#define UI_MAX_DUTY ((1 << UI_RES_16_BIT) - 1)
+#else
+
+#if CONFIG_IDF_TARGET_ESP32
+#define HIGHEST_PWM_RES (LEDC_TIMER_16_BIT) // 20 bit for ESP32, but 16 bit is used
+#else
+#define HIGHEST_PWM_RES (LEDC_TIMER_BIT_MAX - 1) // 14 bit is used
+#endif
+
+#endif
+
+// How much to shift from the HIGHEST_PWM_RES duty resolution to the user interface duty resolution UI_RES_16_BIT
+#define UI_RESOLUTION_SHIFT (UI_RES_16_BIT - HIGHEST_PWM_RES) // 0 for ESP32, 2 for S2, S3, C3
 
 #if SOC_LEDC_SUPPORT_REF_TICK
 // If the PWM frequency is less than EMPIRIC_FREQ, then LEDC_REF_CLK_HZ(1 MHz) source is used, else LEDC_APB_CLK_HZ(80 MHz) source is used
@@ -273,11 +288,14 @@ STATIC uint32_t get_duty_u16(machine_pwm_obj_t *self) {
     }
     return duty;
     */
-    #if UI_RES_16_BIT > HIGHEST_PWM_RES
+    /*
+    #if SOC_LEDC_TIMER_BIT_WIDE_NUM < 16
     return ledc_get_duty(self->mode, self->channel) << (UI_RES_16_BIT - HIGHEST_PWM_RES);
     #else
     return ledc_get_duty(self->mode, self->channel) << (HIGHEST_PWM_RES - UI_RES_16_BIT);
     #endif
+    */
+    return ledc_get_duty(self->mode, self->channel) << UI_RESOLUTION_SHIFT;
 }
 
 STATIC uint32_t get_duty_u10(machine_pwm_obj_t *self) {
@@ -307,11 +325,15 @@ STATIC void set_duty_u16(machine_pwm_obj_t *self, int duty) {
         channel_duty = max_duty;
     }
     */
-    #if UI_RES_16_BIT > HIGHEST_PWM_RES
+    /*
+    #if SOC_LEDC_TIMER_BIT_WIDE_NUM < 16
     int channel_duty = duty >> (UI_RES_16_BIT - HIGHEST_PWM_RES);
     #else
-    int channel_duty = duty << (HIGHEST_PWM_RES - UI_RES_16_BIT);
+    int channel_duty = duty >> (HIGHEST_PWM_RES - UI_RES_16_BIT);
     #endif
+    */
+    int channel_duty = duty >> UI_RESOLUTION_SHIFT;
+
     check_esp_err(ledc_set_duty(self->mode, self->channel, channel_duty));
     check_esp_err(ledc_update_duty(self->mode, self->channel));
     // A thread-safe version of API is ledc_set_duty_and_update
