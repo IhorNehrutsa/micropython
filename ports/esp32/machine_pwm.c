@@ -40,10 +40,6 @@
 #include "driver/ledc.h"
 #include "esp_err.h"
 
-
-//#define PWM_DBG(...)
-//#define PWM_DBG(...) mp_printf(MP_PYTHON_PRINTER, __VA_ARGS__); mp_printf(&mp_plat_print, "\n");
-
 // Total number of channels
 #define PWM_CHANNEL_MAX (LEDC_SPEED_MODE_MAX * LEDC_CHANNEL_MAX)
 
@@ -64,12 +60,6 @@ STATIC chan_t chans[LEDC_SPEED_MODE_MAX][LEDC_CHANNEL_MAX];
 
 // List of timer configs
 STATIC ledc_timer_config_t timers[LEDC_SPEED_MODE_MAX][LEDC_TIMER_MAX];
-
-// timer_idx is an index (end-to-end sequential numbering) for all timers
-// available on the chip and configured in timers[]
-#define TIMER_IDX(mode, timer) (mode * LEDC_TIMER_MAX + timer)
-#define TIMER_IDX_TO_MODE(timer_idx) (timer_idx / LEDC_TIMER_MAX)
-#define TIMER_IDX_TO_TIMER(timer_idx) (timer_idx % LEDC_TIMER_MAX)
 
 // Params for PWM operation
 // 5khz is default frequency
@@ -108,9 +98,6 @@ STATIC ledc_timer_config_t timers[LEDC_SPEED_MODE_MAX][LEDC_TIMER_MAX];
 
 #endif
 
-// How much to shift from the HIGHEST_PWM_RES duty resolution to the user interface duty resolution UI_RES_16_BIT
-//#define UI_RESOLUTION_SHIFT (UI_RES_16_BIT - HIGHEST_PWM_RES) // 0 for ESP32, 2 for S2, S3, C3
-
 #if SOC_LEDC_SUPPORT_REF_TICK
 // If the PWM frequency is less than EMPIRIC_FREQ, then LEDC_REF_CLK_HZ(1 MHz) source is used, else LEDC_APB_CLK_HZ(80 MHz) source is used
 #define EMPIRIC_FREQ (10) // Hz
@@ -127,13 +114,17 @@ typedef struct _machine_pwm_obj_t {
     int mode;
     int channel;
     int timer;
-    int duty_x;   // PWM_RES_10_BIT if duty(), HIGHEST_PWM_RES if duty_u16(), -HIGHEST_PWM_RES if duty_ns()
-    int duty;     // saved values from previous duty setters
-    int duty_u16; // saved values from previous duty setters calculated to duty_u16
+    int duty_x;       // PWM_RES_10_BIT if duty(), HIGHEST_PWM_RES if duty_u16(), -HIGHEST_PWM_RES if duty_ns()
+    int duty;         // saved values from previous duty setters
+    int channel_duty; // saved values from previous duty setters calculated to raw channel_duty
     #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 0)
     uint8_t output_invert;
     #endif
 } machine_pwm_obj_t;
+
+void __assert_fail(const char *__assertion, const char *__file, unsigned int __line, const char *__function) {
+    MP_PRN(MP_PRN_TRACE, "Assert at %s:%d:%s() \"%s\" failed\n", __file, __line, __function, __assertion);
+}
 
 STATIC void register_channel(int mode, int channel, int pin, int timer) {
     assert(mode >= 0);
@@ -172,16 +163,6 @@ STATIC void pwm_init(void) {
             timers[mode][timer].clk_cfg = LEDC_AUTO_CLK; // will reinstall later according to the EMPIRIC_FREQ
         }
     }
-}
-
-#define ANY_PIN (-1)
-STATIC bool is_free_channels(int mode, int pin) {
-    for (int channel = 0; channel < LEDC_CHANNEL_MAX; ++channel) {
-        if ((chans[mode][channel].pin < 0) || (chans[mode][channel].pin == pin)) {
-            return true;
-        }
-    }
-    return false;
 }
 
 // Returns true if the timer is in use in addition to current channel
@@ -248,7 +229,7 @@ STATIC void configure_channel(machine_pwm_obj_t *self) {
     ledc_channel_config_t cfg = {
         .channel = self->channel,
         //.duty = (1 << timers[self->mode][self->timer].duty_resolution) / 2, // 50%
-        .duty = self->duty_u16,
+        .duty = self->channel_duty,
         .gpio_num = self->pin,
         .intr_type = LEDC_INTR_DISABLE,
         .speed_mode = self->mode,
@@ -324,16 +305,6 @@ STATIC void set_duty_u16(machine_pwm_obj_t *self, int duty) {
     } else if (channel_duty > max_duty) {
         channel_duty = max_duty;
     }
-
-    /*
-    #if SOC_LEDC_TIMER_BIT_WIDE_NUM < 16
-    int channel_duty = duty >> (UI_RES_16_BIT - HIGHEST_PWM_RES);
-    #else
-    int channel_duty = duty >> (HIGHEST_PWM_RES - UI_RES_16_BIT);
-    #endif
-    */
-    //int channel_duty = duty >> UI_RESOLUTION_SHIFT;
-
     check_esp_err(ledc_set_duty(self->mode, self->channel, channel_duty));
     check_esp_err(ledc_update_duty(self->mode, self->channel));
 
@@ -356,7 +327,7 @@ STATIC void set_duty_u16(machine_pwm_obj_t *self, int duty) {
 
     self->duty_x = HIGHEST_PWM_RES;
     self->duty = duty;
-    self->duty_u16 = duty;
+    self->channel_duty = channel_duty;
 }
 
 STATIC void set_duty_u10(machine_pwm_obj_t *self, int duty) {
@@ -378,7 +349,6 @@ STATIC void set_duty_ns(machine_pwm_obj_t *self, int ns) {
 }
 
 STATIC void set_duty(machine_pwm_obj_t *self) {
-    MP_PRN(3, "Set_duty() duty_x=%d, duty=%d", self->duty_x, self->duty);
     if (self->duty_x == HIGHEST_PWM_RES) {
         set_duty_u16(self, self->duty);
     } else if (self->duty_x == PWM_RES_10_BIT) {
@@ -386,6 +356,7 @@ STATIC void set_duty(machine_pwm_obj_t *self) {
     } else if (self->duty_x == -HIGHEST_PWM_RES) {
         set_duty_ns(self, self->duty);
     }
+    MP_PRN(3, "Set_duty() duty_x=%d, duty=%d, channel_duty=%d", self->duty_x, self->duty, self->channel_duty);
 }
 
 // Set timer frequency
@@ -450,6 +421,15 @@ STATIC void set_freq(machine_pwm_obj_t *self, unsigned int freq) {
     }
 }
 
+STATIC bool is_free_channels(int mode, int pin) {
+    for (int channel = 0; channel < LEDC_CHANNEL_MAX; ++channel) {
+        if ((chans[mode][channel].pin < 0) || (chans[mode][channel].pin == pin)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // Find self channel or free channel in the mode
 STATIC int find_channel(int mode, int pin) {
     MP_PRN(MP_PRN_TRACE, "Find_channel(mode=%d, pin=%d)", mode, pin)
@@ -465,41 +445,7 @@ STATIC int find_channel(int mode, int pin) {
     return avail_channel;
 }
 
-// Find self channel or free channel in any mode
-STATIC int find_a_channel(machine_pwm_obj_t *self) {
-    MP_PRN(MP_PRN_TRACE, "Find_a_channel()")
-    int channel = -1;
-    for (int mode = 0; mode < LEDC_SPEED_MODE_MAX; ++mode) {
-        channel = find_channel(mode, self->pin);
-        if (channel >= 0) {
-            self->mode = mode;
-            break;
-        }
-    }
-    if (channel < 0) {
-        mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("1 out of PWM channels:%d"), PWM_CHANNEL_MAX); // in all modes
-    }
-    return channel;
-}
-
-STATIC int find_free_timer_in_mode(machine_pwm_obj_t *self, int check_mode) {
-    MP_PRN(MP_PRN_TRACE, "Find_free_timer_in_mode(%d)", check_mode)
-    for (int mode = 0; mode < LEDC_SPEED_MODE_MAX; ++mode) {
-        if ((check_mode < 0) || is_free_channels(check_mode, self->pin)) {
-            for (int timer = 0; timer < LEDC_TIMER_MAX; ++timer) {
-                if ((check_mode < 0) || (check_mode == mode)) {
-                    if (timers[mode][timer].freq_hz == 0) {
-                        self->mode = mode;
-                        return timer;
-                    }
-                }
-            }
-        }
-    }
-    return -1;
-}
-
-// Returns timer with the same mode and frequency
+// Returns timer with the same mode and frequency, freq == 0 means free timer
 STATIC int find_timer(int mode, unsigned int freq) {
     MP_PRN(MP_PRN_TRACE, "Find_timer(mode=%d, freq=%d)", mode, freq)
     for (int timer = 0; timer < LEDC_TIMER_MAX; ++timer) {
@@ -523,72 +469,63 @@ STATIC void select_a_timer(machine_pwm_obj_t *self, int freq) {
     int save_timer = self->timer;
     int save_channel = self->channel;
     int save_mode = self->mode;
-    if (self->mode < 0) {
-        self->mode = 0;
+
+    int mode = self->mode;
+    if (mode < 0) {
+        mode = 0;
     }
 
-    int new_timer = -1;
     // Check if an already running timer with the required frequency is running in the same mode
-    new_timer = find_timer(self->mode, freq);
-    if (save_mode >= 0) {
-        if (!is_free_channels(self->mode, self->pin)) {
-            // There is a timer, but there is no channel
-            new_timer = -1;
-        }
+    int timer = -1;
+    if (is_free_channels(mode, self->pin)) {
+        timer = find_timer(mode, freq);
     }
-
-    int new_mode = self->mode;
     // If no existing timer and channel was found in the same mode, then find a new one in another mode
-    if (new_timer < 0) {
+    if (timer < 0) {
         // Calc next mode
-        if (new_mode > 0) {
-            --new_mode;
-        } else if (new_mode < (LEDC_SPEED_MODE_MAX - 1)) {
-            ++new_mode;
+        int mode_ = mode;
+        if (mode > 0) {
+            --mode;
+        } else if (mode < (LEDC_SPEED_MODE_MAX - 1)) {
+            ++mode;
         }
 
-        if (self->mode != new_mode) {
-            if (is_free_channels(new_mode, ANY_PIN)) {
-                new_timer = find_timer(new_mode, freq);
-                self->mode = new_mode;
+        if (mode_ != mode) {
+            if (is_free_channels(mode, self->pin)) {
+                timer = find_timer(mode, freq);
             }
         }
     }
-    if ((new_timer >= 0) && (timers[self->mode][new_timer].freq_hz != 0)) {
-        if (self->timer != new_timer) {
+    if ((timer >= 0) && (timers[mode][timer].freq_hz != 0)) {
+        if ((self->timer != timer) || self->mode != mode)){
             // Bind the channel to the new timer
-            MP_PRN(MP_PRN_TRACE, "Ledc_bind_channel_timer() m=%d, c=%d, t=%d, nt=%d", self->mode, self->channel, self->timer, new_timer);
-            if (ledc_bind_channel_timer(self->mode, self->channel, new_timer) != ESP_OK) {
-                mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("failed to bind mode %d timer %d to channel %d"), self->mode, self->channel, new_timer);
+            MP_PRN(MP_PRN_TRACE, "Ledc_bind_channel_timer() m=%d, c=%d, t=%d, nt=%d", self->mode, self->channel, self->timer, timer);
+            if (ledc_bind_channel_timer(mode, channel, timer) != ESP_OK) {
+                mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("failed to bind mode %d timer %d to channel %d"), self->mode, self->channel, timer);
             }
-            register_channel(self->mode, self->channel, self->pin, new_timer);
-            //set_duty_u16(self->duty_u16);
-            self->timer = new_timer;
+            register_channel(self->mode, self->channel, self->pin, timer);
+            self->timer = timer;
             set_duty(self);
         }
     }
 
     // If no existing timer and channel was found in any mode, then try to use self timer, mode and channel
-    if (new_timer < 0) {
-        if (!is_timer_in_use(save_mode, save_channel, save_timer)) {
-            // restore
-            self->mode = save_mode;
-            self->channel = save_channel;
-            new_timer = save_timer;
-        }
-
+    if (timer < 0) {
         // Try to find free timer
-        if (new_timer < 0) {
-            #define ANY_MODE (-1)
-            new_timer = find_free_timer_in_mode(self, ANY_MODE);
-
-            if (new_timer < 0) {
-                mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("out of PWM timers:%d"), PWM_TIMER_MAX);
+        mode = 0;
+        while ((timer < 0) && (mode < LEDC_SPEED_MODE_MAX)) {
+            if (is_free_channels(mode, self->pin)) {
+                timer = find_timer(mode, 0);
             }
+            ++mode;
         }
+        if (timer < 0) {
+            mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("out of PWM timers:%d"), PWM_TIMER_MAX);
+        }
+        register_channel(mode, self->channel, self->pin, timer);
     }
-
-    self->timer = new_timer;
+    self->mode = mode;
+    self->timer = timer;
     if ((save_mode != self->mode) || (save_channel != self->channel)) {
         unregister_channel(save_mode, save_channel);
     }
@@ -686,9 +623,15 @@ STATIC void mp_machine_pwm_init_helper(machine_pwm_obj_t *self,
     int save_timer = self->timer;
 
     // Check the current mode and channel
-    int channel = find_a_channel(self);
-    self->channel = channel;
-    int mode = self->mode;
+    int channel = -1;
+    int mode = 0;
+    while ((channel < 0) &&  (mode < LEDC_SPEED_MODE_MAX)) {
+        channel = find_channel(mode, self->pin);
+        ++mode;
+    }
+    if (channel < 0) {
+        mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("1 out of PWM channels:%d"), PWM_CHANNEL_MAX); // in all modes
+    }
 
     int freq = args[ARG_freq].u_int;
     // Check if freq wasn't passed as an argument
@@ -706,21 +649,6 @@ STATIC void mp_machine_pwm_init_helper(machine_pwm_obj_t *self,
     }
 
     select_a_timer(self, freq);
-
-    if (self->mode != mode) {
-        unregister_channel(mode, channel);
-        // find new channel
-        channel = find_channel(mode, self->pin);
-        if (self->mode != mode) {
-            int new_timer = find_free_timer_in_mode(self, self->mode);
-            if (new_timer < 0) {
-                mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("2 out of PWM channels:%d"), PWM_CHANNEL_MAX);
-            }
-            self->timer = new_timer;
-        }
-        self->mode = mode;
-        self->channel = channel;
-    }
 
     #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 0)
     self->output_invert = args[ARG_invert].u_int == 0 ? 0 : 1;
@@ -758,7 +686,7 @@ STATIC mp_obj_t mp_machine_pwm_make_new(const mp_obj_type_t *type,
     self->timer = -1;
     self->duty_x = 0;
     self->duty = 0;
-    self->duty_u16 = 0;
+    self->channel_duty = 0;
     #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 0)
     self->output_invert = 0;
     #endif
