@@ -30,7 +30,9 @@
 #include <assert.h>
 #include <math.h>
 
-//#define MP_PRN_LEVEL 1000 // 3 // 1000 show all messages
+#define MP_PRN_LEVEL 0 // 3 // 1000 show all messages
+#define MP_PRN(...)
+
 #include "py/mpprint.h"
 
 #include "py/runtime.h"
