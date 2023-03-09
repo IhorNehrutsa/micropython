@@ -30,7 +30,7 @@
 #include <assert.h>
 #include <math.h>
 
-#define MP_PRN_LEVEL 1000 // 3 // 1000 show all messages
+//#define MP_PRN_LEVEL 1000 // 3 // 1000 show all messages
 #include "py/mpprint.h"
 
 #include "py/runtime.h"
@@ -499,8 +499,9 @@ STATIC void select_a_timer(machine_pwm_obj_t *self, int freq) {
     }
     // If the timer is found, then bind and set the duty
     if ((timer >= 0) && (timers[mode][timer].freq_hz != 0)
-    && ((self->timer != timer) || (self->mode != mode))
-    && (self->channel >= 0)) {
+//  && ((self->timer != timer) || (self->mode != mode))
+    && (self->channel >= 0)
+    && (self->mode >= 0)) {
         // Bind the channel to the new timer
         MP_PRN(MP_PRN_TRACE, "Ledc_bind_channel_timer() m=%d, c=%d, t=%d, nm=%d, nt=%d", self->mode, self->channel, self->timer, mode, timer);
         self->mode = mode;
@@ -512,17 +513,26 @@ STATIC void select_a_timer(machine_pwm_obj_t *self, int freq) {
         timer = -1;
     }
 
-    // If no existing timer and channel was found, then try to find free timer in any mode
     if (timer < 0) {
-        mode = -1;
-        while ((timer < 0) && (mode < (LEDC_SPEED_MODE_MAX - 1))) {
-            ++mode;
-            if (is_free_channels(mode, self->pin)) {
-                timer = find_timer(mode, 0); // find free timer
+        // Try to reuse self timer
+        if ((self->mode >= 0) && (self->channel >= 0)) {
+            if (!is_timer_in_use(self->mode, self->channel, self->timer)) {
+                mode = self->mode;
+                timer = self->timer;
             }
         }
+        // If no existing timer and channel was found, then try to find free timer in any mode
         if (timer < 0) {
-            mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("out of PWM timers:%d"), PWM_TIMER_MAX);
+            mode = -1;
+            while ((timer < 0) && (mode < (LEDC_SPEED_MODE_MAX - 1))) {
+                ++mode;
+                if (is_free_channels(mode, self->pin)) {
+                    timer = find_timer(mode, 0); // find free timer
+                }
+            }
+            if (timer < 0) {
+                mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("out of PWM timers:%d"), PWM_TIMER_MAX);
+            }
         }
         self->mode = mode;
         self->timer = timer;
@@ -576,6 +586,8 @@ Then set the frequency with the same duty.
 */
 STATIC void mp_machine_pwm_init_helper(machine_pwm_obj_t *self,
     size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    MP_PRN(MP_PRN_TRACE, "init_helper() m=%d c=%d t=%d", self->mode, self->channel, self->timer)
+
     enum { ARG_freq, ARG_duty, ARG_duty_u16, ARG_duty_ns
         #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 4, 0)
         , ARG_invert
@@ -662,9 +674,9 @@ STATIC void mp_machine_pwm_init_helper(machine_pwm_obj_t *self,
     // New PWM assignment
     MP_PRN(MP_PRN_TRACE, "New PWM assignment a=%d, p=%d, ct=%d, sm=%d, m=%d, sc=%d, c=%d, st=%d, t=%d", self->active, chans[mode][channel].pin, chans[mode][channel].timer, save_mode, self->mode, save_channel, self->channel, save_timer, self->timer);
     if ((chans[mode][channel].pin < 0)
-    || ((save_mode != self->mode) && (save_mode >= 0))
-    || ((save_channel != self->channel) && (save_channel >= 0))
-    || ((save_timer != self->timer) && (save_timer >= 0))) {
+    || ((save_mode != self->mode)) // && (save_mode >= 0))
+    || ((save_channel != self->channel)) // && (save_channel >= 0))
+    || ((save_timer != self->timer))) { // && (save_timer >= 0))) {
         configure_channel(self);
     }
     register_channel(self->mode, self->channel, self->pin, self->timer);
