@@ -20,6 +20,8 @@
 #define MICROPY_OBJ_REPR                    (MICROPY_OBJ_REPR_A)
 #if CONFIG_IDF_TARGET_ARCH_XTENSA
 #define MICROPY_NLR_SETJMP                  (1)
+#if CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C6
+#define MICROPY_GCREGS_SETJMP               (1)
 #endif
 
 // memory allocation policies

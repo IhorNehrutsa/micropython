@@ -39,7 +39,9 @@ typedef struct _machine_adc_block_obj_t {
     adc_unit_t unit_id;
     mp_int_t bits;
     adc_bits_width_t width;
-    adc_cali_handle_t handle[ADC_ATTEN_MAX];
+    #if CONFIG_IDF_TARGET_ESP32 || CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32S3
+    esp_adc_cal_characteristics_t *characteristics[ADC_ATTEN_MAX];
+    #endif
 } machine_adc_block_obj_t;
 
 typedef struct _machine_adc_obj_t {

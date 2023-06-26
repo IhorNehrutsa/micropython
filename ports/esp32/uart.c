@@ -34,6 +34,7 @@
 #if MICROPY_HW_ENABLE_UART_REPL
 
 #include <stdio.h>
+#include "soc/uart_periph.h"
 #include "driver/uart.h" // For uart_get_sclk_freq()
 #include "hal/uart_hal.h"
 #include "soc/uart_periph.h"

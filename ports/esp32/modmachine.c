@@ -90,8 +90,9 @@ typedef enum {
 
 static bool is_soft_reset = 0;
 
-// Note: this is from a private IDF header
-extern int esp_clk_cpu_freq(void);
+#if CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C6
+int esp_clk_cpu_freq(void);
+#endif
 
 static mp_obj_t mp_machine_get_freq(void) {
     return mp_obj_new_int(esp_rom_get_cpu_ticks_per_us() * 1000000);
