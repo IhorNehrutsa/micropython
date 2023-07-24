@@ -35,9 +35,6 @@
 #include "freertos/task.h"
 #include "esp_idf_version.h"
 
-// CAN only for ESP-IDF v4.2 and higher because of "driver/twai.h"
-#if (ESP_IDF_VERSION_MAJOR == 4) && (ESP_IDF_VERSION_MINOR >= 2)
-// Headers of ESP-IDF library
 #include "soc/dport_reg.h"
 #include "esp_err.h"
 #include "esp_log.h"
@@ -59,7 +56,6 @@
 #define CAN_DEFAULT_BS2 (4)
 #define CAN_MAX_DATA_FRAME          (8)
 
-#define CAN_MODE_SILENT_LOOPBACK 0x10
 /*
 // Internal Functions
 mp_obj_t esp32_hw_can_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args);
@@ -76,16 +72,19 @@ void can_deinit(const esp32_can_obj_t *self) {
     self->config->initialized = false;
 }
 
+// static const twai_timing_config_t t_config = TWAI_TIMING_CONFIG_25KBITS();
+static const twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+
 // singleton CAN device object
 esp32_can_config_t can_config = {
-    .general = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_2, GPIO_NUM_4, CAN_MODE_NORMAL),
-    .filter = TWAI_FILTER_CONFIG_ACCEPT_ALL(),
+    .general = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_2, GPIO_NUM_4, TWAI_MODE_NORMAL),
+    .filter = f_config,  // TWAI_FILTER_CONFIG_ACCEPT_ALL(),
     .timing = TWAI_TIMING_CONFIG_25KBITS(),
     .initialized = false
 };
 
 STATIC esp32_can_obj_t esp32_can_obj = {
-    {&esp32_can_type},
+    {&machine_can_type},
     .config = &can_config
 };
 
@@ -218,7 +217,7 @@ STATIC mp_obj_t esp32_hw_can_init_helper(esp32_can_obj_t *self, size_t n_args, c
     if (args[ARG_auto_restart].u_bool) {
         mp_raise_NotImplementedError("Auto-restart not supported");
     }
-    self->config->filter = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+    self->config->filter = f_config; // TWAI_FILTER_CONFIG_ACCEPT_ALL();
 
     // clear errors
     self->num_error_warning = 0;
@@ -344,7 +343,7 @@ STATIC mp_obj_t esp32_hw_can_make_new(const mp_obj_type_t *type, size_t n_args, 
     return MP_OBJ_FROM_PTR(self);
 }
 
-// init(tx, rx, baudrate, mode=CAN_MODE_NORMAL, tx_queue=2, rx_queue=5)
+// init(tx, rx, baudrate, mode=NORMAL, tx_queue=2, rx_queue=5)
 STATIC mp_obj_t esp32_hw_can_init(size_t n_args, const mp_obj_t *args, mp_map_t *kw_args) {
     esp32_can_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     if (self->config->initialized) {
@@ -597,8 +596,8 @@ STATIC mp_obj_t esp32_hw_can_clearfilter(mp_obj_t self_in) {
     esp32_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
 
     // Defaults from TWAI_FILTER_CONFIG_ACCEPT_ALL
-    self->config->filter = TWAI_FILTER_CONFIG_ACCEPT_ALL();
-    
+    self->config->filter = f_config; // TWAI_FILTER_CONFIG_ACCEPT_ALL();
+
     // Apply filter
     check_esp_err(twai_stop());
     check_esp_err(twai_driver_uninstall());
@@ -652,12 +651,15 @@ STATIC mp_obj_t esp32_hw_can_setfilter(size_t n_args, const mp_obj_t *pos_args, 
         self->config->filter.acceptance_mask = mask;
     } else {
         self->config->filter.single_filter = self->extframe;
-        _esp32_hw_can_set_filter(self, id, mask, args[ARG_bank].u_int, args[ARG_rtr].u_int);
+        // esp32_hw_can_setfilter(self, id, mask, args[ARG_bank].u_int, args[ARG_rtr].u_int);
         //Check if bank is allowed
+        int bank = 0;
         if (bank > ((self->extframe && self->config->filter.single_filter) ? 0 : 1 )) {
             mp_raise_ValueError("CAN filter parameter error");
         }
         uint32_t preserve_mask;
+        int addr = 0;
+        int rtr = 0;
         if (self->extframe) {
             addr = (addr & 0x1FFFFFFF) << 3 | (rtr ? 0x04 : 0);
             mask = (mask & 0x1FFFFFFF) << 3 | 0x03;
@@ -792,23 +794,12 @@ STATIC MP_DEFINE_CONST_DICT(esp32_can_locals_dict, esp32_can_locals_dict_table);
 
 // Python object definition
 MP_DEFINE_CONST_OBJ_TYPE(
-    esp32_can_type,
+    machine_can_type,
     MP_QSTR_CAN,
     MP_TYPE_FLAG_NONE,
     make_new, esp32_hw_can_make_new,
     print, esp32_hw_can_print,
     locals_dict, (mp_obj_dict_t *)&esp32_can_locals_dict
     );
-/*
-const mp_obj_type_t esp32_can_type = {
-    {&mp_type_type},
-    .name = MP_QSTR_CAN,
-    .print = esp32_hw_can_print,                            // give it a print-function
-    .make_new = esp32_hw_can_make_new,                      // give it a constructor
-    .locals_dict = (mp_obj_dict_t *)&esp32_can_locals_dict, // and the global members
-};
-*/
 
 #endif // MICROPY_HW_ENABLE_CAN
-
-#endif // ESP_IDF_VERSION

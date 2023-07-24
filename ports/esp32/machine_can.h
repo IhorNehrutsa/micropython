@@ -71,7 +71,8 @@ typedef enum _rx_state_t {
     RX_STATE_FIFO_OVERFLOW,
 } rx_state_t;
 
-extern const mp_obj_type_t esp32_can_type;
+extern const mp_obj_type_t machine_can_type;
 
 #endif // MICROPY_HW_ENABLE_CAN
+
 #endif // MICROPY_INCLUDED_ESP32_CAN_H
