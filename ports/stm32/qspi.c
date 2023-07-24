@@ -196,7 +196,7 @@ STATIC int qspi_ioctl(void *self_in, uint32_t cmd) {
     return 0; // success
 }
 
-STATIC void qspi_write_cmd_data(void *self_in, uint8_t cmd, size_t len, uint32_t data) {
+STATIC int qspi_write_cmd_data(void *self_in, uint8_t cmd, size_t len, uint32_t data) {
     (void)self_in;
 
     QUADSPI->FCR = QUADSPI_FCR_CTCF; // clear TC flag
@@ -232,18 +232,27 @@ STATIC void qspi_write_cmd_data(void *self_in, uint8_t cmd, size_t len, uint32_t
         while (!(QUADSPI->SR & QUADSPI_SR_FTF)) {
         }
 
-        // This assumes len==2
-        *(uint16_t *)&QUADSPI->DR = data;
+        if (len == 1) {
+            *(uint8_t *)&QUADSPI->DR = data;
+        } else {
+            // This assumes len==2
+            *(uint16_t *)&QUADSPI->DR = data;
+        }
     }
 
     // Wait for write to finish
     while (!(QUADSPI->SR & QUADSPI_SR_TCF)) {
+        if (QUADSPI->SR & QUADSPI_SR_TEF) {
+            return -MP_EIO;
+        }
     }
 
     QUADSPI->FCR = QUADSPI_FCR_CTCF; // clear TC flag
+
+    return 0;
 }
 
-STATIC void qspi_write_cmd_addr_data(void *self_in, uint8_t cmd, uint32_t addr, size_t len, const uint8_t *src) {
+STATIC int qspi_write_cmd_addr_data(void *self_in, uint8_t cmd, uint32_t addr, size_t len, const uint8_t *src) {
     (void)self_in;
 
     uint8_t adsize = MICROPY_HW_SPI_ADDR_IS_32BIT(addr) ? 3 : 2;
@@ -286,6 +295,9 @@ STATIC void qspi_write_cmd_addr_data(void *self_in, uint8_t cmd, uint32_t addr, 
         // Write out the data 1 byte at a time
         while (len) {
             while (!(QUADSPI->SR & QUADSPI_SR_FTF)) {
+                if (QUADSPI->SR & QUADSPI_SR_TEF) {
+                    return -MP_EIO;
+                }
             }
             *(volatile uint8_t *)&QUADSPI->DR = *src++;
             --len;
@@ -294,12 +306,17 @@ STATIC void qspi_write_cmd_addr_data(void *self_in, uint8_t cmd, uint32_t addr, 
 
     // Wait for write to finish
     while (!(QUADSPI->SR & QUADSPI_SR_TCF)) {
+        if (QUADSPI->SR & QUADSPI_SR_TEF) {
+            return -MP_EIO;
+        }
     }
 
     QUADSPI->FCR = QUADSPI_FCR_CTCF; // clear TC flag
+
+    return 0;
 }
 
-STATIC uint32_t qspi_read_cmd(void *self_in, uint8_t cmd, size_t len) {
+STATIC int qspi_read_cmd(void *self_in, uint8_t cmd, size_t len, uint32_t *dest) {
     (void)self_in;
 
     QUADSPI->FCR = QUADSPI_FCR_CTCF; // clear TC flag
@@ -320,15 +337,20 @@ STATIC uint32_t qspi_read_cmd(void *self_in, uint8_t cmd, size_t len) {
 
     // Wait for read to finish
     while (!(QUADSPI->SR & QUADSPI_SR_TCF)) {
+        if (QUADSPI->SR & QUADSPI_SR_TEF) {
+            return -MP_EIO;
+        }
     }
 
     QUADSPI->FCR = QUADSPI_FCR_CTCF; // clear TC flag
 
     // Read result
-    return QUADSPI->DR;
+    *dest = QUADSPI->DR;
+
+    return 0;
 }
 
-STATIC void qspi_read_cmd_qaddr_qdata(void *self_in, uint8_t cmd, uint32_t addr, size_t len, uint8_t *dest) {
+STATIC int qspi_read_cmd_qaddr_qdata(void *self_in, uint8_t cmd, uint32_t addr, size_t len, uint8_t *dest) {
     (void)self_in;
 
     uint8_t adsize = MICROPY_HW_SPI_ADDR_IS_32BIT(addr) ? 3 : 2;
@@ -366,6 +388,9 @@ STATIC void qspi_read_cmd_qaddr_qdata(void *self_in, uint8_t cmd, uint32_t addr,
     if (((uintptr_t)dest & 3) == 0) {
         while (len >= 4) {
             while (!(QUADSPI->SR & QUADSPI_SR_FTF)) {
+                if (QUADSPI->SR & QUADSPI_SR_TEF) {
+                    return -MP_EIO;
+                }
             }
             *(uint32_t *)dest = QUADSPI->DR;
             dest += 4;
@@ -376,12 +401,17 @@ STATIC void qspi_read_cmd_qaddr_qdata(void *self_in, uint8_t cmd, uint32_t addr,
     // Read in remaining data 1 byte at a time
     while (len) {
         while (!((QUADSPI->SR >> QUADSPI_SR_FLEVEL_Pos) & 0x3f)) {
+            if (QUADSPI->SR & QUADSPI_SR_TEF) {
+                return -MP_EIO;
+            }
         }
         *dest++ = *(volatile uint8_t *)&QUADSPI->DR;
         --len;
     }
 
     QUADSPI->FCR = QUADSPI_FCR_CTCF; // clear TC flag
+
+    return 0;
 }
 
 const mp_qspi_proto_t qspi_proto = {

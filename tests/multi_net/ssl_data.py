@@ -2,7 +2,7 @@
 # This test won't run under CPython because it requires key/cert
 
 try:
-    import ubinascii as binascii, usocket as socket, ussl as ssl
+    import binascii, socket, ssl
 except ImportError:
     print("SKIP")
     raise SystemExit
@@ -38,6 +38,7 @@ cert = binascii.unhexlify(
     b"e960ae3ebc247371b525caeb41bbcf34686015a44c50d226e66aef0a97a63874ca5944ef"
     b"979b57f0b3"
 )
+
 
 # Server
 def instance0():

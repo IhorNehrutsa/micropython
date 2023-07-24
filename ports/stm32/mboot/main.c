@@ -36,6 +36,7 @@
 #include "i2cslave.h"
 #include "irq.h"
 #include "mboot.h"
+#include "mpu.h"
 #include "powerctrl.h"
 #include "sdcard.h"
 #include "dfu.h"
@@ -108,8 +109,14 @@
 // These bits are used to detect valid application firmware at APPLICATION_ADDR
 #define APP_VALIDITY_BITS (0x00000003)
 
+// Symbol provided by the linker, at the address in flash where mboot can start erasing/writing.
+extern uint8_t _mboot_writable_flash_start;
+
 // For 1ms system ticker.
 volatile uint32_t systick_ms;
+
+// The sector number of the first sector that can be erased/written.
+int32_t first_writable_flash_sector;
 
 // Global dfu state
 dfu_context_t dfu_context SECTION_NOZERO_BSS;
@@ -365,10 +372,13 @@ void SystemClock_Config(void) {
 #if defined(STM32F4) || defined(STM32F7)
 #define AHBxENR AHB1ENR
 #define AHBxENR_GPIOAEN_Pos RCC_AHB1ENR_GPIOAEN_Pos
+#elif defined(STM32G0)
+#define AHBxENR IOPENR
+#define AHBxENR_GPIOAEN_Pos RCC_IOPENR_GPIOAEN_Pos
 #elif defined(STM32H7)
 #define AHBxENR AHB4ENR
 #define AHBxENR_GPIOAEN_Pos RCC_AHB4ENR_GPIOAEN_Pos
-#elif defined(STM32WB)
+#elif defined(STM32H5) || defined(STM32WB)
 #define AHBxENR AHB2ENR
 #define AHBxENR_GPIOAEN_Pos RCC_AHB2ENR_GPIOAEN_Pos
 #endif
@@ -400,10 +410,13 @@ void mp_hal_pin_config_speed(uint32_t port_pin, uint32_t speed) {
 /******************************************************************************/
 // FLASH
 
-#if defined(STM32WB)
+#if defined(STM32G0)
+#define FLASH_END (FLASH_BASE + FLASH_SIZE - 1)
+#elif defined(STM32H5)
+#define FLASH_END (0x08000000 + 2 * 1024 * 1024)
+#elif defined(STM32WB)
 #define FLASH_END FLASH_END_ADDR
 #endif
-#define APPLICATION_FLASH_LENGTH (FLASH_END + 1 - APPLICATION_ADDR)
 
 #ifndef MBOOT_SPIFLASH_LAYOUT
 #define MBOOT_SPIFLASH_LAYOUT ""
@@ -421,6 +434,10 @@ void mp_hal_pin_config_speed(uint32_t port_pin, uint32_t speed) {
 #define FLASH_LAYOUT_STR "@Internal Flash  /0x08000000/04*016Kg,01*064Kg,07*128Kg" MBOOT_SPIFLASH_LAYOUT MBOOT_SPIFLASH2_LAYOUT
 #elif defined(STM32F765xx) || defined(STM32F767xx) || defined(STM32F769xx)
 #define FLASH_LAYOUT_STR "@Internal Flash  /0x08000000/04*032Kg,01*128Kg,07*256Kg" MBOOT_SPIFLASH_LAYOUT MBOOT_SPIFLASH2_LAYOUT
+#elif defined(STM32G0)
+#define FLASH_LAYOUT_STR "@Internal Flash  /0x08000000/256*02Kg" MBOOT_SPIFLASH_LAYOUT MBOOT_SPIFLASH2_LAYOUT
+#elif defined(STM32H5)
+#define FLASH_LAYOUT_STR "@Internal Flash  /0x08000000/256*08Kg" MBOOT_SPIFLASH_LAYOUT MBOOT_SPIFLASH2_LAYOUT
 #elif defined(STM32H743xx)
 #define FLASH_LAYOUT_STR "@Internal Flash  /0x08000000/16*128Kg" MBOOT_SPIFLASH_LAYOUT MBOOT_SPIFLASH2_LAYOUT
 #elif defined(STM32H750xx)
@@ -431,7 +448,9 @@ void mp_hal_pin_config_speed(uint32_t port_pin, uint32_t speed) {
 
 static int mboot_flash_mass_erase(void) {
     // Erase all flash pages after mboot.
-    int ret = flash_erase(APPLICATION_ADDR, APPLICATION_FLASH_LENGTH / sizeof(uint32_t));
+    uint32_t start_addr = (uint32_t)&_mboot_writable_flash_start;
+    uint32_t num_words = (FLASH_END + 1 - start_addr) / sizeof(uint32_t);
+    int ret = flash_erase(start_addr, num_words);
     return ret;
 }
 
@@ -439,7 +458,7 @@ static int mboot_flash_page_erase(uint32_t addr, uint32_t *next_addr) {
     uint32_t sector_size = 0;
     uint32_t sector_start = 0;
     int32_t sector = flash_get_sector_info(addr, &sector_start, &sector_size);
-    if (sector <= 0) {
+    if (sector < first_writable_flash_sector) {
         // Don't allow to erase the sector with this bootloader in it, or invalid sectors
         dfu_context.status = DFU_STATUS_ERROR_ADDRESS;
         dfu_context.error = (sector == 0) ? MBOOT_ERROR_STR_OVERWRITE_BOOTLOADER_IDX
@@ -467,8 +486,8 @@ static int mboot_flash_page_erase(uint32_t addr, uint32_t *next_addr) {
 
 static int mboot_flash_write(uint32_t addr, const uint8_t *src8, size_t len) {
     int32_t sector = flash_get_sector_info(addr, NULL, NULL);
-    if (sector <= 0) {
-        // Don't allow to write the sector with this bootloader in it
+    if (sector < first_writable_flash_sector) {
+        // Don't allow to write the sector with this bootloader in it, or invalid sectors.
         dfu_context.status = DFU_STATUS_ERROR_ADDRESS;
         dfu_context.error = (sector == 0) ? MBOOT_ERROR_STR_OVERWRITE_BOOTLOADER_IDX
                                           : MBOOT_ERROR_STR_INVALID_ADDRESS_IDX;
@@ -1063,7 +1082,7 @@ static uint8_t *pyb_usbdd_StrDescriptor(USBD_HandleTypeDef *pdev, uint8_t idx, u
             //
             //     dfu-util -l
             //
-            // See: https://my.st.com/52d187b7 for the algorithim used.
+            // See: https://my.st.com/52d187b7 for the algorithm used.
             uint8_t *id = (uint8_t *)MP_HAL_UNIQUE_ID_ADDRESS;
             char serial_buf[16];
             format_hex(&serial_buf[0], id[11]);
@@ -1131,7 +1150,7 @@ static uint8_t pyb_usbdd_Setup(USBD_HandleTypeDef *pdev, USBD_SetupReqTypedef *r
     if (req->bmRequest == 0x21) {
         // host-to-device request
         if (req->wLength == 0) {
-            // no data, process command straightaway
+            // no data, process command straight away
             dfu_handle_rx(self->bRequest, self->wValue, 0, NULL);
         } else {
             // have data, prepare to receive it
@@ -1300,10 +1319,17 @@ static void leave_bootloader(void) {
     NVIC_SystemReset();
 }
 
+#if defined(STM32H5)
+uint8_t mp_hal_unique_id_address[12];
+#endif
+
 extern PCD_HandleTypeDef pcd_fs_handle;
 extern PCD_HandleTypeDef pcd_hs_handle;
 
 void stm32_main(uint32_t initial_r0) {
+    // Low-level MCU initialisation.
+    stm32_system_init();
+
     #if defined(STM32H7)
     // Configure write-once power options, and wait for voltage levels to be ready
     PWR->CR3 = PWR_CR3_LDOEN;
@@ -1320,8 +1346,10 @@ void stm32_main(uint32_t initial_r0) {
     // Make sure IRQ vector table points to flash where this bootloader lives.
     SCB->VTOR = MBOOT_VTOR;
 
+    #if __CORTEX_M != 33
     // Enable 8-byte stack alignment for IRQ handlers, in accord with EABI
     SCB->CCR |= SCB_CCR_STKALIGN_Msk;
+    #endif
 
     #if defined(STM32F4)
     #if INSTRUCTION_CACHE_ENABLE
@@ -1339,7 +1367,9 @@ void stm32_main(uint32_t initial_r0) {
     #endif
     #endif
 
+    #if __CORTEX_M >= 0x03
     NVIC_SetPriorityGrouping(NVIC_PRIORITYGROUP_4);
+    #endif
 
     #if USE_CACHE && defined(STM32F7)
     SCB_EnableICache();
@@ -1369,6 +1399,18 @@ void stm32_main(uint32_t initial_r0) {
 
 enter_bootloader:
 
+    #if defined(STM32H5)
+    // MPU is needed for H5 to access the unique id.
+    mpu_init();
+
+    // Copy unique id to byte-addressable buffer.
+    volatile uint32_t *src = (volatile uint32_t *)UID_BASE;
+    uint32_t *dest = (uint32_t *)&mp_hal_unique_id_address[0];
+    dest[0] = src[0];
+    dest[1] = src[1];
+    dest[2] = src[2];
+    #endif
+
     MBOOT_BOARD_ENTRY_INIT(&initial_r0);
 
     #if USE_USB_POLLING
@@ -1378,6 +1420,12 @@ enter_bootloader:
     pri <<= (8 - __NVIC_PRIO_BITS);
     __ASM volatile ("msr basepri_max, %0" : : "r" (pri) : "memory");
     #endif
+
+    // Compute the first erasable/writable internal flash sector.
+    first_writable_flash_sector = flash_get_sector_info((uint32_t)&_mboot_writable_flash_start, NULL, NULL);
+    if (first_writable_flash_sector < 0) {
+        first_writable_flash_sector = INT32_MAX;
+    }
 
     #if defined(MBOOT_SPIFLASH_ADDR)
     MBOOT_SPIFLASH_SPIFLASH->config = MBOOT_SPIFLASH_CONFIG;
@@ -1513,7 +1561,7 @@ void PendSV_Handler(void) {
 void SysTick_Handler(void) {
     systick_ms += 1;
 
-    // Read the systick control regster. This has the side effect of clearing
+    // Read the systick control register. This has the side effect of clearing
     // the COUNTFLAG bit, which makes the logic in mp_hal_ticks_us
     // work properly.
     SysTick->CTRL;
@@ -1531,7 +1579,19 @@ void I2Cx_EV_IRQHandler(void) {
 
 #if !USE_USB_POLLING
 
-#if defined(STM32WB)
+#if defined(STM32G0)
+
+void USB_UCPD1_2_IRQHandler(void) {
+    HAL_PCD_IRQHandler(&pcd_fs_handle);
+}
+
+#elif defined(STM32H5)
+
+void USB_DRD_FS_IRQHandler(void) {
+    HAL_PCD_IRQHandler(&pcd_fs_handle);
+}
+
+#elif defined(STM32WB)
 
 void USB_LP_IRQHandler(void) {
     HAL_PCD_IRQHandler(&pcd_fs_handle);

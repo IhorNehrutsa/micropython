@@ -26,6 +26,9 @@
  */
 
 #include "py/runtime.h"
+
+#if MICROPY_PY_MACHINE_I2C
+
 #include "py/mphal.h"
 #include "py/mperrno.h"
 #include "extmod/machine_i2c.h"
@@ -35,7 +38,7 @@
 #include "clock_config.h"
 
 #define DEFAULT_I2C_FREQ  (400000)
-#define RISETIME_NS       (300)
+#define RISETIME_NS       (200)
 #define I2C_TIMEOUT       (100)
 
 #define IS_BUS_BUSY       (i2c->I2CM.STATUS.bit.BUSSTATE == 3)
@@ -69,7 +72,6 @@ typedef struct _machine_i2c_obj_t {
 } machine_i2c_obj_t;
 
 extern Sercom *sercom_instance[];
-extern void *sercom_table[SERCOM_INST_NUM];
 
 STATIC void i2c_send_command(Sercom *i2c, uint8_t command) {
     i2c->I2CM.CTRLB.bit.CMD = command;
@@ -79,7 +81,7 @@ STATIC void i2c_send_command(Sercom *i2c, uint8_t command) {
 
 void common_i2c_irq_handler(int i2c_id) {
     // handle Sercom I2C IRQ
-    machine_i2c_obj_t *self = sercom_table[i2c_id];
+    machine_i2c_obj_t *self = MP_STATE_PORT(sercom_table[i2c_id]);
     // Handle IRQ
     if (self != NULL) {
         Sercom *i2c = self->instance;
@@ -99,7 +101,7 @@ void common_i2c_irq_handler(int i2c_id) {
                 i2c->I2CM.INTFLAG.reg |= SERCOM_I2CM_INTFLAG_SB;
             }
         } else if (IRQ_DATA_SENT) {
-            if (NACK_RECVD) { // e.g. NACK after adress for both read and write.
+            if (NACK_RECVD) { // e.g. NACK after address for both read and write.
                 self->state = state_nack; // force stop of transmission
                 i2c->I2CM.INTFLAG.reg |= SERCOM_I2CM_INTFLAG_MB;
             } else if (self->len > 0) { // data to be sent
@@ -144,7 +146,7 @@ mp_obj_t machine_i2c_make_new(const mp_obj_type_t *type, size_t n_args, size_t n
     }
 
     // Get the peripheral object.
-    machine_i2c_obj_t *self = mp_obj_malloc(machine_i2c_obj_t, &machine_hw_i2c_type);
+    machine_i2c_obj_t *self = mp_obj_malloc(machine_i2c_obj_t, &machine_i2c_type);
     self->id = id;
     self->instance = sercom_instance[self->id];
 
@@ -159,7 +161,7 @@ mp_obj_t machine_i2c_make_new(const mp_obj_type_t *type, size_t n_args, size_t n
     if (sda_pad_config.pad_nr != 0 || scl_pad_config.pad_nr != 1) {
         mp_raise_ValueError(MP_ERROR_TEXT("invalid pin for sda or scl"));
     }
-    sercom_table[self->id] = self;
+    MP_STATE_PORT(sercom_table[self->id]) = self;
     self->freq = args[ARG_freq].u_int;
 
     // Configure the Pin mux.
@@ -185,7 +187,14 @@ mp_obj_t machine_i2c_make_new(const mp_obj_type_t *type, size_t n_args, size_t n
     // baud = peripheral_freq / (2 * baudrate) - 5 - (rise_time * peripheral_freq) / 2
     // Just set the minimal configuration for standard and fast mode.
     // Set Baud. Assume ~300ns rise time. Maybe set later by a keyword argument.
-    i2c->I2CM.BAUD.reg = get_peripheral_freq() / (2 * self->freq) - 5 - (get_peripheral_freq() / 1000000) * RISETIME_NS / 2000;
+    int32_t baud = get_peripheral_freq() / (2 * self->freq) - 5 - (get_peripheral_freq() / 1000000) * RISETIME_NS / 2000;
+    if (baud < 0) {
+        baud = 0;
+    }
+    if (baud > 255) {
+        baud = 255;
+    }
+    i2c->I2CM.BAUD.reg = baud;
 
     // Enable interrupts
     sercom_register_irq(self->id, &common_i2c_irq_handler);
@@ -194,7 +203,7 @@ mp_obj_t machine_i2c_make_new(const mp_obj_type_t *type, size_t n_args, size_t n
     #elif defined(MCU_SAMD51)
     NVIC_EnableIRQ(SERCOM0_0_IRQn + 4 * self->id); // MB interrupt
     NVIC_EnableIRQ(SERCOM0_0_IRQn + 4 * self->id + 1); // SB interrupt
-    NVIC_EnableIRQ(SERCOM0_0_IRQn + 4 * self->id + 3); // ERRROR interrupt
+    NVIC_EnableIRQ(SERCOM0_0_IRQn + 4 * self->id + 3); // ERROR interrupt
     #endif
 
     // Now enable I2C.
@@ -224,7 +233,7 @@ STATIC int machine_i2c_transfer_single(mp_obj_base_t *self_in, uint16_t addr, si
     i2c->I2CM.INTENSET.reg = SERCOM_I2CM_INTENSET_MB | SERCOM_I2CM_INTENSET_SB | SERCOM_I2CM_INTENSET_ERROR;
     self->state = state_busy;
 
-    // Send the adress, which kicks off the transfer
+    // Send the address, which kicks off the transfer
     i2c->I2CM.ADDR.bit.ADDR = (addr << 1) | READ_MODE;
 
     // Transfer the data
@@ -260,7 +269,7 @@ STATIC const mp_machine_i2c_p_t machine_i2c_p = {
 };
 
 MP_DEFINE_CONST_OBJ_TYPE(
-    machine_hw_i2c_type,
+    machine_i2c_type,
     MP_QSTR_I2C,
     MP_TYPE_FLAG_NONE,
     make_new, machine_i2c_make_new,
@@ -268,3 +277,5 @@ MP_DEFINE_CONST_OBJ_TYPE(
     protocol, &machine_i2c_p,
     locals_dict, &mp_machine_i2c_locals_dict
     );
+
+#endif

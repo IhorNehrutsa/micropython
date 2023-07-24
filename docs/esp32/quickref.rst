@@ -57,7 +57,6 @@ The :mod:`esp32` module::
 
     import esp32
 
-    esp32.hall_sensor()     # read the internal hall sensor
     esp32.raw_temperature() # read the internal temperature of the MCU, in Fahrenheit
     esp32.ULP()             # access to the Ultra-Low-Power Co-processor
 
@@ -67,6 +66,9 @@ by reading the temperature sensor immediately after waking up from sleep.
 
 Networking
 ----------
+
+WLAN
+^^^^
 
 The :mod:`network` module::
 
@@ -109,6 +111,55 @@ connection succeeds or the interface gets disabled.  This can be changed by
 calling ``wlan.config(reconnects=n)``, where n are the number of desired reconnect
 attempts (0 means it won't retry, -1 will restore the default behaviour of trying
 to reconnect forever).
+
+LAN
+^^^
+
+To use the wired interfaces one has to specify the pins and mode ::
+
+    import network
+
+    lan = network.LAN(mdc=PIN_MDC, ...)   # Set the pin and mode configuration
+    lan.active(True)                      # activate the interface
+    lan.ifconfig()                        # get the interface's IP/netmask/gw/DNS addresses
+
+
+The keyword arguments for the constructor defining the PHY type and interface are:
+
+- mdc=pin-object    # set the mdc and mdio pins.
+- mdio=pin-object
+- power=pin-object  # set the pin which switches the power of the PHY device.
+- phy_type=<type>   # Select the PHY device type. Supported devices are PHY_LAN8710,
+  PHY_LAN8720, PH_IP101, PHY_RTL8201, PHY_DP83848 and PHY_KSZ8041
+- phy_addr=number   # The address number of the PHY device.
+- ref_clk_mode=mode # Defines, whether the ref_clk at the ESP32 is an input
+  or output. Suitable values are Pin.IN and Pin.OUT.
+- ref_clk=pin-object  # defines the Pin used for ref_clk.
+
+These are working configurations for LAN interfaces of popular boards::
+
+    # Olimex ESP32-GATEWAY: power controlled by Pin(5)
+    # Olimex ESP32 PoE and ESP32-PoE ISO: power controlled by Pin(12)
+
+    lan = network.LAN(mdc=machine.Pin(23), mdio=machine.Pin(18), power=machine.Pin(5), 
+                      phy_type=network.PHY_LAN8720, phy_addr=0,
+                      ref_clk=machine.Pin(17), ref_clk_mode=machine.Pin.OUT)
+
+    # Wireless-Tag's WT32-ETH01
+
+    lan = network.LAN(mdc=machine.Pin(23), mdio=machine.Pin(18),
+                      phy_type=network.PHY_LAN8720, phy_addr=1, power=None)
+
+    # Wireless-Tag's WT32-ETH01 v1.4
+
+    lan = network.LAN(mdc=machine.Pin(23), mdio=machine.Pin(18),
+                      phy_type=network.PHY_LAN8720, phy_addr=1,
+                      power=machine.Pin(16))
+
+    # Espressif ESP32-Ethernet-Kit_A_V1.2
+
+    lan = network.LAN(id=0, mdc=Pin(23), mdio=Pin(18), power=Pin(5),
+                      phy_type=network.PHY_IP101, phy_addr=1)
 
 Delay and timing
 ----------------
@@ -241,8 +292,8 @@ Use the :ref:`machine.PWM <machine.PWM>` class::
 
     from machine import Pin, PWM
 
-    pwm0 = PWM(Pin(0))         # create PWM object from a pin
-    freq = pwm0.freq()         # get current frequency (default 5kHz)
+    pwm0 = PWM(Pin(0), freq=5000, duty_u16=32768) # create PWM object from a pin
+    freq = pwm0.freq()         # get current frequency
     pwm0.freq(1000)            # set PWM frequency from 1Hz to 40MHz
 
     duty = pwm0.duty()         # get current duty cycle, range 0-1023 (default 512, 50%)

@@ -115,12 +115,6 @@ STATIC mp_obj_t vfs_posix_file_fileno(mp_obj_t self_in) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(vfs_posix_file_fileno_obj, vfs_posix_file_fileno);
 
-STATIC mp_obj_t vfs_posix_file___exit__(size_t n_args, const mp_obj_t *args) {
-    (void)n_args;
-    return mp_stream_close(args[0]);
-}
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(vfs_posix_file___exit___obj, 4, 4, vfs_posix_file___exit__);
-
 STATIC mp_uint_t vfs_posix_file_read(mp_obj_t o_in, void *buf, mp_uint_t size, int *errcode) {
     mp_obj_vfs_posix_file_t *o = MP_OBJ_TO_PTR(o_in);
     check_fd_is_open(o);
@@ -194,7 +188,7 @@ STATIC mp_uint_t vfs_posix_file_ioctl(mp_obj_t o_in, mp_uint_t request, uintptr_
             return 0;
         case MP_STREAM_GET_FILENO:
             return o->fd;
-        #if MICROPY_PY_USELECT
+        #if MICROPY_PY_SELECT
         case MP_STREAM_POLL: {
             #ifdef _WIN32
             mp_raise_NotImplementedError(MP_ERROR_TEXT("poll on file not available on win32"));
@@ -239,7 +233,7 @@ STATIC const mp_rom_map_elem_t vfs_posix_rawfile_locals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR_close), MP_ROM_PTR(&mp_stream_close_obj) },
     { MP_ROM_QSTR(MP_QSTR___del__), MP_ROM_PTR(&mp_stream_close_obj) },
     { MP_ROM_QSTR(MP_QSTR___enter__), MP_ROM_PTR(&mp_identity_obj) },
-    { MP_ROM_QSTR(MP_QSTR___exit__), MP_ROM_PTR(&vfs_posix_file___exit___obj) },
+    { MP_ROM_QSTR(MP_QSTR___exit__), MP_ROM_PTR(&mp_stream___exit___obj) },
 };
 
 STATIC MP_DEFINE_CONST_DICT(vfs_posix_rawfile_locals_dict, vfs_posix_rawfile_locals_dict_table);

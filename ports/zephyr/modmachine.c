@@ -61,7 +61,7 @@ STATIC mp_obj_t machine_idle(void) {
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(machine_idle_obj, machine_idle);
 
 STATIC const mp_rom_map_elem_t machine_module_globals_table[] = {
-    { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_umachine) },
+    { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_machine) },
     #ifdef CONFIG_REBOOT
     { MP_ROM_QSTR(MP_QSTR_reset), MP_ROM_PTR(&machine_reset_obj) },
     #endif
@@ -69,10 +69,10 @@ STATIC const mp_rom_map_elem_t machine_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_idle), MP_ROM_PTR(&machine_idle_obj) },
 
     #if MICROPY_PY_MACHINE_I2C
-    { MP_ROM_QSTR(MP_QSTR_I2C), MP_ROM_PTR(&machine_hard_i2c_type) },
+    { MP_ROM_QSTR(MP_QSTR_I2C), MP_ROM_PTR(&machine_i2c_type) },
     #endif
     #if MICROPY_PY_MACHINE_SPI
-    { MP_ROM_QSTR(MP_QSTR_SPI), MP_ROM_PTR(&machine_hard_spi_type) },
+    { MP_ROM_QSTR(MP_QSTR_SPI), MP_ROM_PTR(&machine_spi_type) },
     #endif
     { MP_ROM_QSTR(MP_QSTR_UART), MP_ROM_PTR(&machine_uart_type) },
     { MP_ROM_QSTR(MP_QSTR_Pin), MP_ROM_PTR(&machine_pin_type) },
@@ -89,6 +89,6 @@ const mp_obj_module_t mp_module_machine = {
     .globals = (mp_obj_dict_t *)&machine_module_globals,
 };
 
-MP_REGISTER_MODULE(MP_QSTR_umachine, mp_module_machine);
+MP_REGISTER_EXTENSIBLE_MODULE(MP_QSTR_machine, mp_module_machine);
 
 #endif // MICROPY_PY_MACHINE

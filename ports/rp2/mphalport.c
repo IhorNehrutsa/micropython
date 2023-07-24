@@ -39,7 +39,7 @@
 #include "lib/cyw43-driver/src/cyw43.h"
 #endif
 
-#if MICROPY_HW_ENABLE_UART_REPL || MICROPY_HW_ENABLE_USBDEV
+#if MICROPY_HW_ENABLE_UART_REPL || MICROPY_HW_USB_CDC
 
 #ifndef MICROPY_HW_STDIN_BUFFER_LEN
 #define MICROPY_HW_STDIN_BUFFER_LEN 512
@@ -50,7 +50,7 @@ ringbuf_t stdin_ringbuf = { stdin_ringbuf_array, sizeof(stdin_ringbuf_array) };
 
 #endif
 
-#if MICROPY_HW_ENABLE_USBDEV
+#if MICROPY_HW_USB_CDC
 
 uint8_t cdc_itf_pending; // keep track of cdc interfaces which need attention to poll
 
@@ -91,16 +91,25 @@ void tud_cdc_rx_cb(uint8_t itf) {
 
 uintptr_t mp_hal_stdio_poll(uintptr_t poll_flags) {
     uintptr_t ret = 0;
-    #if MICROPY_HW_ENABLE_USBDEV
+    #if MICROPY_HW_USB_CDC
     poll_cdc_interfaces();
     #endif
-    #if MICROPY_HW_ENABLE_UART_REPL || MICROPY_HW_ENABLE_USBDEV
+    #if MICROPY_HW_ENABLE_UART_REPL || MICROPY_HW_USB_CDC
     if ((poll_flags & MP_STREAM_POLL_RD) && ringbuf_peek(&stdin_ringbuf) != -1) {
         ret |= MP_STREAM_POLL_RD;
     }
+    if (poll_flags & MP_STREAM_POLL_WR) {
+        #if MICROPY_HW_ENABLE_UART_REPL
+        ret |= MP_STREAM_POLL_WR;
+        #else
+        if (tud_cdc_connected() && tud_cdc_write_available() > 0) {
+            ret |= MP_STREAM_POLL_WR;
+        }
+        #endif
+    }
     #endif
     #if MICROPY_PY_OS_DUPTERM
-    ret |= mp_uos_dupterm_poll(poll_flags);
+    ret |= mp_os_dupterm_poll(poll_flags);
     #endif
     return ret;
 }
@@ -108,7 +117,7 @@ uintptr_t mp_hal_stdio_poll(uintptr_t poll_flags) {
 // Receive single character
 int mp_hal_stdin_rx_chr(void) {
     for (;;) {
-        #if MICROPY_HW_ENABLE_USBDEV
+        #if MICROPY_HW_USB_CDC
         poll_cdc_interfaces();
         #endif
 
@@ -117,7 +126,7 @@ int mp_hal_stdin_rx_chr(void) {
             return c;
         }
         #if MICROPY_PY_OS_DUPTERM
-        int dupterm_c = mp_uos_dupterm_rx_chr();
+        int dupterm_c = mp_os_dupterm_rx_chr();
         if (dupterm_c >= 0) {
             return dupterm_c;
         }
@@ -132,15 +141,20 @@ void mp_hal_stdout_tx_strn(const char *str, mp_uint_t len) {
     mp_uart_write_strn(str, len);
     #endif
 
-    #if MICROPY_HW_ENABLE_USBDEV
+    #if MICROPY_HW_USB_CDC
     if (tud_cdc_connected()) {
         for (size_t i = 0; i < len;) {
             uint32_t n = len - i;
             if (n > CFG_TUD_CDC_EP_BUFSIZE) {
                 n = CFG_TUD_CDC_EP_BUFSIZE;
             }
-            while (n > tud_cdc_write_available()) {
+            int timeout = 0;
+            // Wait with a max of USC_CDC_TIMEOUT ms
+            while (n > tud_cdc_write_available() && timeout++ < MICROPY_HW_USB_CDC_TX_TIMEOUT) {
                 MICROPY_EVENT_POLL_HOOK
+            }
+            if (timeout >= MICROPY_HW_USB_CDC_TX_TIMEOUT) {
+                break;
             }
             uint32_t n2 = tud_cdc_write(str + i, n);
             tud_cdc_write_flush();
@@ -150,7 +164,7 @@ void mp_hal_stdout_tx_strn(const char *str, mp_uint_t len) {
     #endif
 
     #if MICROPY_PY_OS_DUPTERM
-    mp_uos_dupterm_tx_strn(str, len);
+    mp_os_dupterm_tx_strn(str, len);
     #endif
 }
 
@@ -190,10 +204,12 @@ MP_WEAK void mp_hal_get_mac(int idx, uint8_t buf[6]) {
     // The mac should come from cyw43 otp when CYW43_USE_OTP_MAC is defined
     // This is loaded into the state after the driver is initialised
     // cyw43_hal_generate_laa_mac is only called by the driver to generate a mac if otp is not set
-    memcpy(buf, cyw43_state.mac, 6);
-    #else
-    mp_hal_generate_laa_mac(idx, buf);
+    if (idx == MP_HAL_MAC_WLAN0) {
+        memcpy(buf, cyw43_state.mac, 6);
+        return;
+    }
     #endif
+    mp_hal_generate_laa_mac(idx, buf);
 }
 
 void mp_hal_get_mac_ascii(int idx, size_t chr_off, size_t chr_len, char *dest) {

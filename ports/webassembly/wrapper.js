@@ -29,26 +29,26 @@ var Module = {};
 var mainProgram = function()
 {
   mp_js_init = Module.cwrap('mp_js_init', 'null', ['number']);
-  mp_js_do_str = Module.cwrap('mp_js_do_str', 'number', ['string']);
+  mp_js_do_str = Module.cwrap('mp_js_do_str', 'number', ['string'], {async: true});
   mp_js_init_repl = Module.cwrap('mp_js_init_repl', 'null', ['null']);
-  mp_js_process_char = Module.cwrap('mp_js_process_char', 'number', ['number']);
+  mp_js_process_char = Module.cwrap('mp_js_process_char', 'number', ['number'], {async: true});
 
-  MP_JS_EPOCH = (new Date()).getTime();
+  MP_JS_EPOCH = Date.now();
 
   if (typeof window === 'undefined' && require.main === module) {
       var fs = require('fs');
-      var stack_size = 64 * 1024;
+      var heap_size = 128 * 1024;
       var contents = '';
       var repl = true;
 
       for (var i = 0; i < process.argv.length; i++) {
           if (process.argv[i] === '-X' && i < process.argv.length - 1) {
-              if (process.argv[i + 1].includes('stack=')) {
-                  stack_size = parseInt(process.argv[i + 1].split('stack=')[1]);
+              if (process.argv[i + 1].includes('heapsize=')) {
+                  heap_size = parseInt(process.argv[i + 1].split('heapsize=')[1]);
                   if (process.argv[i + 1].substr(-1).toLowerCase() === 'k') {
-                      stack_size *= 1024;
+                      heap_size *= 1024;
                   } else if (process.argv[i + 1].substr(-1).toLowerCase() === 'm') {
-                      stack_size *= 1024 * 1024;
+                      heap_size *= 1024 * 1024;
                   }
               }
           } else if (process.argv[i].includes('.py')) {
@@ -56,20 +56,30 @@ var mainProgram = function()
               repl = false;;
           }
       }
-      mp_js_init(stack_size);
+
+      if (process.stdin.isTTY === false) {
+          contents = fs.readFileSync(0, 'utf8');
+          repl = 0;
+      }
+
+      mp_js_init(heap_size);
 
       if (repl) {
           mp_js_init_repl();
           process.stdin.setRawMode(true);
           process.stdin.on('data', function (data) {
               for (var i = 0; i < data.length; i++) {
-                  if (mp_js_process_char(data[i])) {
-                      process.exit()
-                  }
+                  mp_js_process_char(data[i]).then(result => {
+                      if (result) {
+                          process.exit()
+                      }
+                  })
               }
           });
       } else {
-          process.exitCode = mp_js_do_str(contents);
+          mp_js_do_str(contents).then(exitCode => {
+              process.exitCode = exitCode
+          })
       }
   }
 }

@@ -26,27 +26,21 @@
 
 mergeInto(LibraryManager.library, {
     mp_js_write: function(ptr, len) {
-        for (var i = 0; i < len; ++i) {
-            if (typeof window === 'undefined') {
-                var b = Buffer.alloc(1);
-                b.writeInt8(getValue(ptr + i, 'i8'));
-                process.stdout.write(b);
-            } else {
-                var c = String.fromCharCode(getValue(ptr + i, 'i8'));
-                var mp_js_stdout = document.getElementById('mp_js_stdout');
-                var print = new Event('print');
-                print.data = c;
-                mp_js_stdout.dispatchEvent(print);
-            }
+        const buffer = HEAPU8.subarray(ptr, ptr + len)
+        if (ENVIRONMENT_IS_NODE) {
+            process.stdout.write(buffer);
+        } else {
+            const printEvent = new CustomEvent('micropython-print', { detail: buffer });
+            document.dispatchEvent(printEvent);
         }
     },
 
     mp_js_ticks_ms: function() {
-        return (new Date()).getTime() - MP_JS_EPOCH;
+        return Date.now() - MP_JS_EPOCH;
     },
 
     mp_js_hook: function() {
-        if (typeof window === 'undefined') {
+        if (ENVIRONMENT_IS_NODE) {
             var mp_interrupt_char = Module.ccall('mp_hal_get_interrupt_char', 'number', ['number'], ['null']);
             var fs = require('fs');
 

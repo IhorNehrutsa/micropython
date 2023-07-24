@@ -38,6 +38,7 @@ The basic MicroPython firmware is implemented in the main port file, e.g ``main.
 
 .. code-block:: c
 
+   #include "py/builtin.h"
    #include "py/compile.h"
    #include "py/gc.h"
    #include "py/mperrno.h"
@@ -98,8 +99,8 @@ We also need a Makefile at this point for the port:
    include $(TOP)/extmod/extmod.mk
 
    # Set CFLAGS and libraries.
-   CFLAGS = -I. -I$(BUILD) -I$(TOP)
-   LIBS = -lm
+   CFLAGS += -I. -I$(BUILD) -I$(TOP)
+   LIBS += -lm
 
    # Define the required source files.
    SRC_C = \
@@ -109,6 +110,9 @@ We also need a Makefile at this point for the port:
        shared/runtime/gchelper_generic.c \
        shared/runtime/pyexec.c \
        shared/runtime/stdout_helpers.c \
+
+   # Define source files containung qstrs.
+   SRC_QSTR += shared/readline/readline.c shared/runtime/pyexec.c
 
    # Define the required object files.
    OBJ = $(PY_CORE_O) $(addprefix $(BUILD)/, $(SRC_C:.c=.o))
@@ -146,9 +150,6 @@ The following is an example of an ``mpconfigport.h`` file:
    #define MICROPY_HELPER_REPL                     (1)
    #define MICROPY_ERROR_REPORTING                 (MICROPY_ERROR_REPORTING_TERSE)
    #define MICROPY_FLOAT_IMPL                      (MICROPY_FLOAT_IMPL_FLOAT)
-
-   // Enable u-modules to be imported with their standard name, like sys.
-   #define MICROPY_MODULE_WEAK_LINKS               (1)
 
    // Fine control over Python builtins, classes, modules, etc.
    #define MICROPY_PY_ASYNC_AWAIT                  (0)

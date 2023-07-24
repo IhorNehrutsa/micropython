@@ -37,6 +37,8 @@
 #define MICROPY_HW_STDIN_BUFFER_LEN 128
 #endif
 
+extern volatile uint32_t ticks_us64_upper;
+
 STATIC uint8_t stdin_ringbuf_array[MICROPY_HW_STDIN_BUFFER_LEN];
 ringbuf_t stdin_ringbuf = { stdin_ringbuf_array, sizeof(stdin_ringbuf_array), 0, 0 };
 
@@ -111,17 +113,45 @@ void mp_hal_delay_ms(mp_uint_t ms) {
 
 void mp_hal_delay_us(mp_uint_t us) {
     if (us > 0) {
-        uint32_t start = mp_hal_ticks_us();
         #if defined(MCU_SAMD21)
-        // SAMD21 counter has effective 32 bit width
+        uint32_t start = mp_hal_ticks_us();
         while ((mp_hal_ticks_us() - start) < us) {
         }
-        #elif defined(MCU_SAMD51)
-        // SAMD51 counter has effective 29 bit width
-        while (((mp_hal_ticks_us() - start) & (MICROPY_PY_UTIME_TICKS_PERIOD - 1)) < us) {
+        #else
+        uint64_t stop = mp_hal_ticks_us_64() + us;
+        while (mp_hal_ticks_us_64() < stop) {
         }
         #endif
     }
+}
+
+uint64_t mp_hal_ticks_us_64(void) {
+    uint32_t us64_upper = ticks_us64_upper;
+    uint32_t us64_lower;
+    uint8_t intflag;
+    __disable_irq();
+    #if defined(MCU_SAMD21)
+    us64_lower = REG_TC4_COUNT32_COUNT;
+    intflag = TC4->COUNT32.INTFLAG.reg;
+    #elif defined(MCU_SAMD51)
+    TC0->COUNT32.CTRLBSET.reg = TC_CTRLBSET_CMD_READSYNC;
+    while (TC0->COUNT32.CTRLBSET.reg != 0) {
+    }
+    us64_lower = REG_TC0_COUNT32_COUNT;
+    intflag = TC0->COUNT32.INTFLAG.reg;
+    #endif
+    __enable_irq();
+    if ((intflag & TC_INTFLAG_OVF) && us64_lower < 0x10000000) {
+        // The timer counter overflowed before reading it but the IRQ handler
+        // has not yet been called, so perform the IRQ arithmetic now.
+        us64_upper++;
+    }
+    #if defined(MCU_SAMD21)
+    return ((uint64_t)us64_upper << 31) | (us64_lower >> 1);
+    #elif defined(MCU_SAMD51)
+    return ((uint64_t)us64_upper << 28) | (us64_lower >> 4);
+    #endif
+
 }
 
 uintptr_t mp_hal_stdio_poll(uintptr_t poll_flags) {
@@ -132,8 +162,12 @@ uintptr_t mp_hal_stdio_poll(uintptr_t poll_flags) {
         ret |= MP_STREAM_POLL_RD;
     }
 
+    if ((poll_flags & MP_STREAM_POLL_WR) && tud_cdc_connected() && tud_cdc_write_available() > 0) {
+        ret |= MP_STREAM_POLL_WR;
+    }
+
     #if MICROPY_PY_OS_DUPTERM
-    ret |= mp_uos_dupterm_poll(poll_flags);
+    ret |= mp_os_dupterm_poll(poll_flags);
     #endif
     return ret;
 }
@@ -148,7 +182,7 @@ int mp_hal_stdin_rx_chr(void) {
         }
 
         #if MICROPY_PY_OS_DUPTERM
-        int dupterm_c = mp_uos_dupterm_rx_chr();
+        int dupterm_c = mp_os_dupterm_rx_chr();
         if (dupterm_c >= 0) {
             return dupterm_c;
         }
@@ -164,8 +198,13 @@ void mp_hal_stdout_tx_strn(const char *str, mp_uint_t len) {
             if (n > CFG_TUD_CDC_EP_BUFSIZE) {
                 n = CFG_TUD_CDC_EP_BUFSIZE;
             }
-            while (n > tud_cdc_write_available()) {
+            int timeout = 0;
+            // Wait with a max of USC_CDC_TIMEOUT ms
+            while (n > tud_cdc_write_available() && timeout++ < MICROPY_HW_USB_CDC_TX_TIMEOUT) {
                 MICROPY_EVENT_POLL_HOOK
+            }
+            if (timeout >= MICROPY_HW_USB_CDC_TX_TIMEOUT) {
+                break;
             }
             uint32_t n2 = tud_cdc_write(str + i, n);
             tud_cdc_write_flush();
@@ -173,6 +212,6 @@ void mp_hal_stdout_tx_strn(const char *str, mp_uint_t len) {
         }
     }
     #if MICROPY_PY_OS_DUPTERM
-    mp_uos_dupterm_tx_strn(str, len);
+    mp_os_dupterm_tx_strn(str, len);
     #endif
 }

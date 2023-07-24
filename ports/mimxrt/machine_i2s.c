@@ -60,9 +60,9 @@
 // - non-blocking mode is enabled when a callback is set with the irq() method
 // - the DMA callback is used to implement the asynchronous background operations
 //
-// Mode3: Uasyncio
+// Mode3: Asyncio
 // - implements the stream protocol
-// - uasyncio mode is enabled when the ioctl() function is called
+// - asyncio mode is enabled when the ioctl() function is called
 // - the state of the internal ring buffer is used to detect that I2S samples can be read or written
 //
 // The samples contained in the app buffer supplied for the readinto() and write() methods have the following convention:
@@ -99,7 +99,6 @@
 
 #define NUM_I2S_USER_FORMATS (4)
 #define I2S_RX_FRAME_SIZE_IN_BYTES (8)
-#define AUDIO_PLL_CLOCK (2U)
 #define SAI_CHANNEL_0 (0)
 #define SAI_NUM_AUDIO_CHANNELS (2U)
 
@@ -123,7 +122,7 @@ typedef enum {
 typedef enum {
     BLOCKING,
     NON_BLOCKING,
-    UASYNCIO
+    ASYNCIO
 } io_mode_t;
 
 typedef enum {
@@ -208,42 +207,69 @@ STATIC const int8_t i2s_frame_map[NUM_I2S_USER_FORMATS][I2S_RX_FRAME_SIZE_IN_BYT
 // PLL output frequency = 24MHz * (.loopDivider + .numerator/.denominator)
 
 // Configuration 1: for sampling frequencies [Hz]:  8000, 12000, 16000, 24000, 32000, 48000
-// Clock frequency = 786,432,480 Hz
+// Clock frequency = 786,432,000 Hz = 48000 * 64 * 256
 STATIC const clock_audio_pll_config_t audioPllConfig_8000_48000 = {
     .loopDivider = 32,          // PLL loop divider. Valid range for DIV_SELECT divider value: 27~54
     .postDivider = 1,           // Divider after the PLL, should only be 1, 2, 4, 8, 16
-    .numerator = 76802,         // 30 bit numerator of fractional loop divider
+    .numerator = 76800,         // 30 bit numerator of fractional loop divider
     .denominator = 100000,      // 30 bit denominator of fractional loop divider
+    #if !defined(MIMXRT117x_SERIES)
     .src = kCLOCK_PllClkSrc24M  // Pll clock source
+    #endif
 };
 
 // Configuration 2: for sampling frequencies [Hz]:  11025, 22050, 44100
-// Clock frequency = 722,534,880
+// Clock frequency = 722,534,400 = 44100 * 64 * 256
 STATIC const clock_audio_pll_config_t audioPllConfig_11025_44100 = {
     .loopDivider = 30,          // PLL loop divider. Valid range for DIV_SELECT divider value: 27~54
     .postDivider = 1,           // Divider after the PLL, should only be 1, 2, 4, 8, 16
-    .numerator = 10562,         // 30 bit numerator of fractional loop divider
+    .numerator = 10560,         // 30 bit numerator of fractional loop divider
     .denominator = 100000,      // 30 bit denominator of fractional loop divider
+    #if !defined(MIMXRT117x_SERIES)
     .src = kCLOCK_PllClkSrc24M  // Pll clock source
+    #endif
 };
 
+#if defined(MIMXRT117x_SERIES)
+// for 1176 the pre_div value is used for post_div of the Audio PLL,
+// which is 2**n: 0->1, 1->2, 2->4, 3->8, 4->16, 5->32
+// The divider is 8 bit and must be given as n (not n-1)
+// So the total division factor is given by (2**p) * d
 STATIC const i2s_clock_config_t clock_config_map[] = {
-    {kSAI_SampleRate8KHz, &audioPllConfig_8000_48000, 5, 63},
-    {kSAI_SampleRate11025Hz, &audioPllConfig_11025_44100, 3, 63},
-    {kSAI_SampleRate12KHz, &audioPllConfig_8000_48000, 3, 63},
-    {kSAI_SampleRate16KHz, &audioPllConfig_8000_48000, 2, 63},
-    {kSAI_SampleRate22050Hz, &audioPllConfig_11025_44100, 1, 63},
-    {kSAI_SampleRate24KHz, &audioPllConfig_8000_48000, 1, 63},
-    {kSAI_SampleRate32KHz, &audioPllConfig_8000_48000, 1, 47},
-    {kSAI_SampleRate44100Hz, &audioPllConfig_11025_44100, 0, 63},
-    {kSAI_SampleRate48KHz, &audioPllConfig_8000_48000, 0, 63}
+    {kSAI_SampleRate8KHz, &audioPllConfig_8000_48000, 1, 192},     // 384
+    {kSAI_SampleRate11025Hz, &audioPllConfig_11025_44100, 1, 128}, // 256
+    {kSAI_SampleRate12KHz, &audioPllConfig_8000_48000, 1, 128},    // 256
+    {kSAI_SampleRate16KHz, &audioPllConfig_8000_48000, 0, 192},    // 192
+    {kSAI_SampleRate22050Hz, &audioPllConfig_11025_44100, 0, 128}, // 128
+    {kSAI_SampleRate24KHz, &audioPllConfig_8000_48000, 0, 128},    // 128
+    {kSAI_SampleRate32KHz, &audioPllConfig_8000_48000, 0, 96},     // 96
+    {kSAI_SampleRate44100Hz, &audioPllConfig_11025_44100, 0, 64},  // 64
+    {kSAI_SampleRate48KHz, &audioPllConfig_8000_48000, 0, 64}      // 64
 };
 
-STATIC const I2S_Type *i2s_base_ptr[] = I2S_BASE_PTRS;
+STATIC const clock_root_t i2s_clock_mux[] = I2S_CLOCK_MUX;
+#else
+// for 10xx the total division factor is given by (p + 1) * (d + 1)
+STATIC const i2s_clock_config_t clock_config_map[] = {
+    {kSAI_SampleRate8KHz, &audioPllConfig_8000_48000, 5, 63},      // 384
+    {kSAI_SampleRate11025Hz, &audioPllConfig_11025_44100, 3, 63},  // 256
+    {kSAI_SampleRate12KHz, &audioPllConfig_8000_48000, 3, 63},     // 256
+    {kSAI_SampleRate16KHz, &audioPllConfig_8000_48000, 2, 63},     // 192
+    {kSAI_SampleRate22050Hz, &audioPllConfig_11025_44100, 1, 63},  // 128
+    {kSAI_SampleRate24KHz, &audioPllConfig_8000_48000, 1, 63},     // 128
+    {kSAI_SampleRate32KHz, &audioPllConfig_8000_48000, 1, 47},     // 96
+    {kSAI_SampleRate44100Hz, &audioPllConfig_11025_44100, 0, 63},  // 64
+    {kSAI_SampleRate48KHz, &audioPllConfig_8000_48000, 0, 63}      // 64
+};
+
 STATIC const clock_mux_t i2s_clock_mux[] = I2S_CLOCK_MUX;
 STATIC const clock_div_t i2s_clock_pre_div[] = I2S_CLOCK_PRE_DIV;
 STATIC const clock_div_t i2s_clock_div[] = I2S_CLOCK_DIV;
 STATIC const iomuxc_gpr_mode_t i2s_iomuxc_gpr_mode[] = I2S_IOMUXC_GPR_MODE;
+#endif
+
+STATIC const I2S_Type *i2s_base_ptr[] = I2S_BASE_PTRS;
+
 STATIC const dma_request_source_t i2s_dma_req_src_tx[] = I2S_DMA_REQ_SRC_TX;
 STATIC const dma_request_source_t i2s_dma_req_src_rx[] = I2S_DMA_REQ_SRC_RX;
 STATIC const gpio_map_t i2s_gpio_map[] = I2S_GPIO_MAP;
@@ -415,7 +441,7 @@ STATIC uint32_t fill_appbuf_from_ringbuf(machine_i2s_obj_t *self, mp_buffer_info
 
     // copy audio samples from the ring buffer to the app buffer
     // loop, copying samples until the app buffer is filled
-    // For uasyncio mode, the loop will make an early exit if the ring buffer becomes empty
+    // For asyncio mode, the loop will make an early exit if the ring buffer becomes empty
     // Example:
     //   a MicroPython I2S object is configured for 16-bit mono (2 bytes per audio sample).
     //   For every frame coming from the ring buffer (8 bytes), 2 bytes are "cherry picked" and
@@ -441,7 +467,7 @@ STATIC uint32_t fill_appbuf_from_ringbuf(machine_i2s_obj_t *self, mp_buffer_info
                         ;
                     }
                     num_bytes_copied_to_appbuf++;
-                } else if (self->io_mode == UASYNCIO) {
+                } else if (self->io_mode == ASYNCIO) {
                     if (ringbuf_pop(&self->ring_buffer, app_p + r_to_a_mapping) == false) {
                         // ring buffer is empty, exit
                         goto exit;
@@ -458,7 +484,7 @@ STATIC uint32_t fill_appbuf_from_ringbuf(machine_i2s_obj_t *self, mp_buffer_info
                     while (ringbuf_pop(&self->ring_buffer, &discard_byte) == false) {
                         ;
                     }
-                } else if (self->io_mode == UASYNCIO) {
+                } else if (self->io_mode == ASYNCIO) {
                     if (ringbuf_pop(&self->ring_buffer, &discard_byte) == false) {
                         // ring buffer is empty, exit
                         goto exit;
@@ -521,7 +547,7 @@ STATIC uint32_t copy_appbuf_to_ringbuf(machine_i2s_obj_t *self, mp_buffer_info_t
 
     // copy audio samples from the app buffer to the ring buffer
     // loop, reading samples until the app buffer is emptied
-    // for uasyncio mode, the loop will make an early exit if the ring buffer becomes full
+    // for asyncio mode, the loop will make an early exit if the ring buffer becomes full
 
     uint32_t a_index = 0;
 
@@ -532,7 +558,7 @@ STATIC uint32_t copy_appbuf_to_ringbuf(machine_i2s_obj_t *self, mp_buffer_info_t
                 ;
             }
             a_index++;
-        } else if (self->io_mode == UASYNCIO) {
+        } else if (self->io_mode == ASYNCIO) {
             if (ringbuf_push(&self->ring_buffer, ((uint8_t *)appbuf->buf)[a_index]) == false) {
                 // ring buffer is full, exit
                 break;
@@ -674,10 +700,24 @@ STATIC void edma_i2s_callback(edma_handle_t *handle, void *userData, bool transf
 
 STATIC bool i2s_init(machine_i2s_obj_t *self) {
 
+    #if defined(MIMXRT117x_SERIES)
+    clock_audio_pll_config_t pll_config = *get_pll_config(self->rate);
+    pll_config.postDivider = get_clock_pre_divider(self->rate);
+    CLOCK_InitAudioPll(&pll_config);
+    CLOCK_SetRootClockMux(i2s_clock_mux[self->i2s_id], I2S_AUDIO_PLL_CLOCK);
+    CLOCK_SetRootClockDiv(i2s_clock_mux[self->i2s_id], get_clock_divider(self->rate));
+    uint32_t clock_freq = CLOCK_GetFreq(kCLOCK_AudioPllOut) / get_clock_divider(self->rate);
+
+    #else
+
     CLOCK_InitAudioPll(get_pll_config(self->rate));
-    CLOCK_SetMux(i2s_clock_mux[self->i2s_id], AUDIO_PLL_CLOCK);
+    CLOCK_SetMux(i2s_clock_mux[self->i2s_id], I2S_AUDIO_PLL_CLOCK);
     CLOCK_SetDiv(i2s_clock_pre_div[self->i2s_id], get_clock_pre_divider(self->rate));
     CLOCK_SetDiv(i2s_clock_div[self->i2s_id], get_clock_divider(self->rate));
+    uint32_t clock_freq =
+        (CLOCK_GetFreq(kCLOCK_AudioPllClk) / (get_clock_divider(self->rate) + 1U) /
+            (get_clock_pre_divider(self->rate) + 1U));
+    #endif
 
     if (!set_iomux(self->sck, SCK, self->i2s_id)) {
         return false;
@@ -695,7 +735,24 @@ STATIC bool i2s_init(machine_i2s_obj_t *self) {
         if (!set_iomux(self->mck, MCK, self->i2s_id)) {
             return false;
         }
+        #if defined(MIMXRT117x_SERIES)
+        switch (self->i2s_id) {
+            case 1:
+                IOMUXC_GPR->GPR0 |= IOMUXC_GPR_GPR0_SAI1_MCLK_DIR_MASK;
+                break;
+            case 2:
+                IOMUXC_GPR->GPR1 |= IOMUXC_GPR_GPR1_SAI2_MCLK_DIR_MASK;
+                break;
+            case 3:
+                IOMUXC_GPR->GPR2 |= IOMUXC_GPR_GPR2_SAI3_MCLK_DIR_MASK;
+                break;
+            case 4:
+                IOMUXC_GPR->GPR2 |= IOMUXC_GPR_GPR2_SAI4_MCLK_DIR_MASK;
+                break;
+        }
+        #else
         IOMUXC_EnableMode(IOMUXC_GPR, i2s_iomuxc_gpr_mode[self->i2s_id], true);
+        #endif
     }
 
     self->dma_channel = allocate_dma_channel();
@@ -743,10 +800,6 @@ STATIC bool i2s_init(machine_i2s_obj_t *self) {
         return false; // should never happen
     }
 
-    uint32_t clock_freq =
-        (CLOCK_GetFreq(kCLOCK_AudioPllClk) / (get_clock_divider(self->rate) + 1U) /
-            (get_clock_pre_divider(self->rate) + 1U));
-
     SAI_TxSetBitClockRate(self->i2s_inst, clock_freq, self->rate, get_dma_bits(self->mode, self->bits),
         SAI_NUM_AUDIO_CHANNELS);
     SAI_RxSetBitClockRate(self->i2s_inst, clock_freq, self->rate, get_dma_bits(self->mode, self->bits),
@@ -773,7 +826,7 @@ STATIC bool i2s_init(machine_i2s_obj_t *self) {
 
     memset(self->edmaTcd, 0, sizeof(edma_tcd_t));
 
-    // continuous DMA operation is acheived using the scatter/gather feature, with one TCD linked back to itself
+    // continuous DMA operation is achieved using the scatter/gather feature, with one TCD linked back to itself
     EDMA_TcdSetTransferConfig(self->edmaTcd, &transferConfig, self->edmaTcd);
     EDMA_TcdEnableInterrupts(self->edmaTcd, kEDMA_MajorInterruptEnable | kEDMA_HalfInterruptEnable);
     EDMA_InstallTCD(DMA0, self->dma_channel, self->edmaTcd);
@@ -1132,7 +1185,7 @@ STATIC mp_uint_t machine_i2s_stream_read(mp_obj_t self_in, void *buf_in, mp_uint
         self->non_blocking_descriptor.index = 0;
         self->non_blocking_descriptor.copy_in_progress = true;
         return size;
-    } else { // blocking or uasyncio mode
+    } else { // blocking or asyncio mode
         mp_buffer_info_t appbuf;
         appbuf.buf = (void *)buf_in;
         appbuf.len = size;
@@ -1159,7 +1212,7 @@ STATIC mp_uint_t machine_i2s_stream_write(mp_obj_t self_in, const void *buf_in, 
         self->non_blocking_descriptor.index = 0;
         self->non_blocking_descriptor.copy_in_progress = true;
         return size;
-    } else { // blocking or uasyncio mode
+    } else { // blocking or asyncio mode
         mp_buffer_info_t appbuf;
         appbuf.buf = (void *)buf_in;
         appbuf.len = size;
@@ -1172,7 +1225,7 @@ STATIC mp_uint_t machine_i2s_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_
     machine_i2s_obj_t *self = MP_OBJ_TO_PTR(self_in);
     mp_uint_t ret;
     uintptr_t flags = arg;
-    self->io_mode = UASYNCIO; // a call to ioctl() is an indication that uasyncio is being used
+    self->io_mode = ASYNCIO; // a call to ioctl() is an indication that asyncio is being used
 
     if (request == MP_STREAM_POLL) {
         ret = 0;

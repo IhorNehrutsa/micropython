@@ -31,6 +31,7 @@
 #include "py/obj.h"
 #include "py/runtime.h"
 #include "shared/runtime/pyexec.h"
+#include "drivers/dht/dht.h"
 
 // This needs to be set before we include the RTOS headers
 #define USE_US_TIMER 1
@@ -395,7 +396,7 @@ mp_uint_t machine_time_pulse_us(mp_hal_pin_obj_t pin, int pulse_level, mp_uint_t
 }
 
 STATIC const mp_rom_map_elem_t machine_module_globals_table[] = {
-    { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_umachine) },
+    { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_machine) },
     { MP_ROM_QSTR(MP_QSTR_mem8), MP_ROM_PTR(&machine_mem8_obj) },
     { MP_ROM_QSTR(MP_QSTR_mem16), MP_ROM_PTR(&machine_mem16_obj) },
     { MP_ROM_QSTR(MP_QSTR_mem32), MP_ROM_PTR(&machine_mem32_obj) },
@@ -418,6 +419,7 @@ STATIC const mp_rom_map_elem_t machine_module_globals_table[] = {
     #endif
 
     { MP_ROM_QSTR(MP_QSTR_time_pulse_us), MP_ROM_PTR(&machine_time_pulse_us_obj) },
+    { MP_ROM_QSTR(MP_QSTR_dht_readinto), MP_ROM_PTR(&dht_readinto_obj) },
 
     { MP_ROM_QSTR(MP_QSTR_RTC), MP_ROM_PTR(&pyb_rtc_type) },
     { MP_ROM_QSTR(MP_QSTR_Timer), MP_ROM_PTR(&esp_timer_type) },
@@ -454,6 +456,6 @@ const mp_obj_module_t mp_module_machine = {
     .globals = (mp_obj_dict_t *)&machine_module_globals,
 };
 
-MP_REGISTER_MODULE(MP_QSTR_umachine, mp_module_machine);
+MP_REGISTER_EXTENSIBLE_MODULE(MP_QSTR_machine, mp_module_machine);
 
 #endif // MICROPY_PY_MACHINE

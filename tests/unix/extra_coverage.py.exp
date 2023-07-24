@@ -17,6 +17,8 @@ abc
 # GC
 0
 0
+# GC part 2
+pass
 # tracked allocation
 m_tracked_head = 0
 0 1
@@ -46,26 +48,28 @@ RuntimeError:
 RuntimeError: 
 # repl
 ame__
-mport 
+port 
 
-builtins        micropython     _thread         _uasyncio
-btree           cexample        cmath           cppexample
-ffi             framebuf        gc              math
-termios         uarray          ubinascii       ucollections
-ucryptolib      uctypes         uerrno          uhashlib
-uheapq          uio             ujson           umachine
-uos             urandom         ure             uselect
-usocket         ussl            ustruct         usys
-utime           utimeq          uwebsocket      uzlib
-ime
+builtins        micropython     _asyncio        _thread
+array           binascii        btree           cexample
+cmath           collections     cppexample      cryptolib
+deflate         errno           example_package
+ffi             framebuf        gc              hashlib
+heapq           io              json            machine
+math            os              random          re
+select          socket          ssl             struct
+sys             termios         time            uctypes
+websocket
+me
 
-utime           utimeq
+micropython     machine         math
 
 argv            atexit          byteorder       exc_info
-exit            getsizeof       implementation  maxsize
-modules         path            platform        print_exception
-ps1             ps2             stderr          stdin
-stdout          tracebacklimit  version         version_info
+executable      exit            getsizeof       implementation
+maxsize         modules         path            platform
+print_exception                 ps1             ps2
+stderr          stdin           stdout          tracebacklimit
+version         version_info
 ementation
 # attrtuple
 (start=1, stop=2, step=3)
@@ -178,7 +182,6 @@ OSError
 None
 None
 cpp None
-5
 (3, 'hellocpp')
 frzstr1
 frzstr1.py
@@ -209,3 +212,13 @@ b'bytes 1234\x01'
 2
 3
 frozentest.py
+example_package.__init__
+<module 'example_package.foo.bar'>
+example_package.foo.bar.f
+<module 'example_package'> <module 'example_package.foo'> <module 'example_package.foo.bar'>
+example_package.f
+example_package.foo.f
+example_package.foo.bar.f
+True
+example_package.foo.f
+True

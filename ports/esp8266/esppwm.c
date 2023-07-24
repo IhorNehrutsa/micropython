@@ -165,7 +165,7 @@ pwm_start(void) {
         }
     }
     PWM_DBG("2channel:%d,single[0]:%d,[1]:%d,[2]:%d,[3]:%d\n", *local_channel, local_single[0].h_time, local_single[1].h_time, local_single[2].h_time, local_single[3].h_time);
-    // step 4: cacl delt time
+    // step 4: calc delta time
     for (i = *local_channel - 1; i > 0; i--) {
         local_single[i].h_time -= local_single[i - 1].h_time;
     }
@@ -389,7 +389,6 @@ pwm_add(uint8_t pin_id, uint32_t pin_mux, uint32_t pin_func) {
             pwm.duty[i] = 0;
             pwm_gpio |= (1 << pin_num[channel]);
             PIN_FUNC_SELECT(pin_mux, pin_func);
-            GPIO_REG_WRITE(GPIO_PIN_ADDR(GPIO_ID_PIN(pin_num[channel])), GPIO_REG_READ(GPIO_PIN_ADDR(GPIO_ID_PIN(pin_num[channel]))) & (~GPIO_PIN_PAD_DRIVER_SET(GPIO_PAD_DRIVER_ENABLE)));  // disable open drain;
             pwm_channel_num++;
             UNLOCK_PWM(critical);   // leave critical
             return channel;
