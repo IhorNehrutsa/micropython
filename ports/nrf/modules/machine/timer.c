@@ -29,7 +29,7 @@
 #include "timer.h"
 #include "nrfx_timer.h"
 
-#if MICROPY_PY_MACHINE_TIMER
+#if MICROPY_PY_MACHINE_TIMER_NRF
 
 enum {
     TIMER_MODE_ONESHOT,
@@ -135,7 +135,7 @@ STATIC mp_obj_t machine_timer_make_new(const mp_obj_type_t *type, size_t n_args,
     }
 
     // Timer peripheral usage:
-    // Every timer instance has a numer of capture/compare (CC) registers.
+    // Every timer instance has a number of capture/compare (CC) registers.
     // These can store either the value to compare against (to trigger an
     // interrupt or a shortcut) or store a value returned from a
     // capture/compare event.
@@ -243,4 +243,4 @@ MP_DEFINE_CONST_OBJ_TYPE(
     locals_dict, &machine_timer_locals_dict
     );
 
-#endif // MICROPY_PY_MACHINE_TIMER
+#endif // MICROPY_PY_MACHINE_TIMER_NRF

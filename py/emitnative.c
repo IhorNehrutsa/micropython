@@ -401,7 +401,7 @@ STATIC void emit_native_start_pass(emit_t *emit, pass_kind_t pass, scope_t *scop
 
     // local variables begin unbound, and have unknown type
     for (mp_uint_t i = num_args; i < emit->local_vtype_alloc; i++) {
-        emit->local_vtype[i] = VTYPE_UNBOUND;
+        emit->local_vtype[i] = emit->do_viper_types ? VTYPE_UNBOUND : VTYPE_PYOBJ;
     }
 
     // values on stack begin unbound
@@ -894,7 +894,7 @@ STATIC void emit_access_stack(emit_t *emit, int pos, vtype_kind_t *vtype, int re
 }
 
 // does an efficient X=pop(); discard(); push(X)
-// needs a (non-temp) register in case the poped element was stored in the stack
+// needs a (non-temp) register in case the popped element was stored in the stack
 STATIC void emit_fold_stack_top(emit_t *emit, int reg_dest) {
     stack_info_t *si = &emit->stack_info[emit->stack_size - 2];
     si[0] = si[1];
@@ -1527,6 +1527,7 @@ STATIC void emit_native_load_subscr(emit_t *emit) {
                             break;
                         }
                         #endif
+                        need_reg_single(emit, reg_index, 0);
                         ASM_MOV_REG_IMM(emit->as, reg_index, index_value);
                         ASM_ADD_REG_REG(emit->as, reg_index, reg_base); // add index to base
                         reg_base = reg_index;
@@ -1544,6 +1545,7 @@ STATIC void emit_native_load_subscr(emit_t *emit) {
                             break;
                         }
                         #endif
+                        need_reg_single(emit, reg_index, 0);
                         ASM_MOV_REG_IMM(emit->as, reg_index, index_value << 1);
                         ASM_ADD_REG_REG(emit->as, reg_index, reg_base); // add 2*index to base
                         reg_base = reg_index;
@@ -1561,6 +1563,7 @@ STATIC void emit_native_load_subscr(emit_t *emit) {
                             break;
                         }
                         #endif
+                        need_reg_single(emit, reg_index, 0);
                         ASM_MOV_REG_IMM(emit->as, reg_index, index_value << 2);
                         ASM_ADD_REG_REG(emit->as, reg_index, reg_base); // add 4*index to base
                         reg_base = reg_index;
@@ -2362,14 +2365,13 @@ STATIC void emit_native_binary_op(emit_t *emit, mp_binary_op_t op) {
         } else if (op == MP_BINARY_OP_MULTIPLY) {
             ASM_MUL_REG_REG(emit->as, REG_ARG_2, reg_rhs);
             emit_post_push_reg(emit, vtype_lhs, REG_ARG_2);
-        } else if (MP_BINARY_OP_LESS <= op && op <= MP_BINARY_OP_NOT_EQUAL) {
-            // comparison ops are (in enum order):
-            //  MP_BINARY_OP_LESS
-            //  MP_BINARY_OP_MORE
-            //  MP_BINARY_OP_EQUAL
-            //  MP_BINARY_OP_LESS_EQUAL
-            //  MP_BINARY_OP_MORE_EQUAL
-            //  MP_BINARY_OP_NOT_EQUAL
+        } else if (op == MP_BINARY_OP_LESS
+                   || op == MP_BINARY_OP_MORE
+                   || op == MP_BINARY_OP_EQUAL
+                   || op == MP_BINARY_OP_LESS_EQUAL
+                   || op == MP_BINARY_OP_MORE_EQUAL
+                   || op == MP_BINARY_OP_NOT_EQUAL) {
+            // comparison ops
 
             if (vtype_lhs != vtype_rhs) {
                 EMIT_NATIVE_VIPER_TYPE_ERROR(emit, MP_ERROR_TEXT("comparison of int and uint"));

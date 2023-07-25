@@ -1,11 +1,16 @@
 include("$(PORT_DIR)/boards/manifest.py")
 
 # Networking
-require("webrepl")
-require("urequests")
+require("bundle-networking")
 
 # Drivers
 require("lsm6dsox")
+require("espflash")
+
+# Utils
+require("time")
+require("senml")
+require("logging")
 
 # Bluetooth
-require("aioble", client=True, central=True, l2cap=True, security=True)
+require("aioble")

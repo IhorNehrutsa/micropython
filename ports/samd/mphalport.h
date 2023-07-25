@@ -35,41 +35,26 @@
 #include "hpl_time_measure.h"
 #include "sam.h"
 
+#define MICROPY_HW_USB_CDC_TX_TIMEOUT (500)
+
 extern int mp_interrupt_char;
 extern volatile uint32_t systick_ms;
-extern volatile uint32_t systick_ms_upper;
+uint64_t mp_hal_ticks_us_64(void);
 
 void mp_hal_set_interrupt_char(int c);
 
-// Define an alias fo systick_ms, because the shared softtimer.c uses
-// the symbol uwTick for the systick ms counter.
-#define uwTick systick_ms
-
 #define mp_hal_delay_us_fast  mp_hal_delay_us
 
-static inline mp_uint_t mp_hal_ticks_ms(void) {
-    return systick_ms;
+static inline uint64_t mp_hal_ticks_ms_64(void) {
+    return mp_hal_ticks_us_64() / 1000;
 }
 
-static inline uint64_t mp_hal_ticks_ms_64(void) {
-    return ((uint64_t)systick_ms_upper << 32) + systick_ms;
+static inline mp_uint_t mp_hal_ticks_ms(void) {
+    return (mp_uint_t)mp_hal_ticks_ms_64();
 }
 
 static inline mp_uint_t mp_hal_ticks_us(void) {
-    #if defined(MCU_SAMD21)
-
-    return REG_TC4_COUNT32_COUNT;
-
-    #elif defined(MCU_SAMD51)
-
-    TC0->COUNT32.CTRLBSET.reg = TC_CTRLBSET_CMD_READSYNC;
-    while (TC0->COUNT32.CTRLBSET.reg != 0) {
-    }
-    return REG_TC0_COUNT32_COUNT >> 3;
-
-    #else
-    return systick_ms * 1000;
-    #endif
+    return (mp_uint_t)mp_hal_ticks_us_64();
 }
 
 #if defined(MCU_SAMD21)
@@ -89,7 +74,7 @@ static inline mp_uint_t mp_hal_ticks_cpu(void) {
 #endif
 
 static inline uint64_t mp_hal_time_ns(void) {
-    return mp_hal_ticks_ms_64() * 1000000;
+    return mp_hal_ticks_us_64() * 1000;
 }
 
 // C-level pin HAL
@@ -98,6 +83,9 @@ static inline uint64_t mp_hal_time_ns(void) {
 
 #define MP_HAL_PIN_FMT "%u"
 #define mp_hal_pin_obj_t uint
+
+#define mp_hal_quiet_timing_enter() MICROPY_BEGIN_ATOMIC_SECTION()
+#define mp_hal_quiet_timing_exit(irq_state) MICROPY_END_ATOMIC_SECTION(irq_state)
 
 extern uint32_t machine_pin_open_drain_mask[];
 

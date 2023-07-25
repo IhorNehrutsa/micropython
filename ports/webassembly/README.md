@@ -49,15 +49,15 @@ using the require command and the general API outlined below. For example:
 var mp_js = require('./build/micropython.js');
 
 mp_js_init(64 * 1024);
-mp_js_do_str("print('hello world')\n");
+await mp_js_do_str("print('hello world')\n");
 ```
 
 Running with HTML
 -----------------
 
-The prerequisite for browser operation of micropython.js is an element with
-the id `mp_js_stdout` which receives `print` events. The following code
-demonstrates basic functionality:
+The prerequisite for browser operation of micropython.js is to listen to the
+`micropython-print` event, which is passed data when MicroPython code prints
+something to stdout.  The following code demonstrates basic functionality:
 
 ```html
 <!doctype html>
@@ -66,14 +66,19 @@ demonstrates basic functionality:
     <script src="build/micropython.js"></script>
   </head>
   <body>
-    <div id='mp_js_stdout'></div>
+    <pre id="micropython-stdout"></pre>
     <script>
-      mp_js_stdout.addEventListener('print', function(e) {
-        document.write(e.data);
+      document.addEventListener("micropython-print", function(e) {
+        let output = document.getElementById("micropython-stdout");
+        output.innerText += new TextDecoder().decode(e.detail);
       }, false);
 
-      mp_js_init(64 * 1024);
-      mp_js_do_str('print(\'hello world\')');
+      var mp_js_startup = Module["onRuntimeInitialized"];
+      Module["onRuntimeInitialized"] = async function() {
+        mp_js_startup();
+        mp_js_init(64 * 1024);
+        await mp_js_do_str("print('hello world')");
+      };
     </script>
   </body>
 </html>
@@ -103,7 +108,7 @@ Initialize MicroPython with the given stack size in bytes. This must be
 called before attempting to interact with MicroPython.
 
 ```
-mp_js_do_str(code)
+await mp_js_do_str(code)
 ```
 
 Execute the input code. `code` must be a `string`.
@@ -116,7 +121,7 @@ Initialize MicroPython repl. Must be called before entering characters into
 the repl.
 
 ```
-mp_js_process_char(char)
+await mp_js_process_char(char)
 ```
 
 Input character into MicroPython repl. `char` must be of type `number`. This

@@ -24,7 +24,11 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 #include "py/runtime.h"
+
+#if MICROPY_PY_MACHINE_SPI
+
 #include "py/mphal.h"
 #include "extmod/machine_spi.h"
 #include "modmachine.h"
@@ -57,11 +61,10 @@ typedef struct _machine_spi_obj_t {
 } machine_spi_obj_t;
 
 extern Sercom *sercom_instance[];
-void *sercom_table[SERCOM_INST_NUM] = {};
 
 void common_spi_irq_handler(int spi_id) {
     // handle Sercom IRQ RXC
-    machine_spi_obj_t *self = sercom_table[spi_id];
+    machine_spi_obj_t *self = MP_STATE_PORT(sercom_table[spi_id]);
     // Handle IRQ
     if (self != NULL) {
         Sercom *spi = sercom_instance[self->id];
@@ -82,7 +85,7 @@ void common_spi_irq_handler(int spi_id) {
 
 STATIC void machine_spi_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
     machine_spi_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    mp_printf(print, "SPI(%u), baudrate=%u, firstbit=%u, polarity=%u, phase=%u, bits=8",
+    mp_printf(print, "SPI(%u, baudrate=%u, firstbit=%u, polarity=%u, phase=%u, bits=8)",
         self->id, self->baudrate, self->firstbit, self->polarity, self->phase);
 }
 
@@ -208,7 +211,13 @@ STATIC void machine_spi_init(mp_obj_base_t *self_in, size_t n_args, const mp_obj
 
         // SPI is driven by the clock of GCLK Generator 2, freq by get_peripheral_freq()
         // baud = bus_freq / (2 * baudrate) - 1
-        uint32_t baud = get_peripheral_freq() / (2 * self->baudrate) - 1;
+        uint32_t baud = get_peripheral_freq() / (2 * self->baudrate);
+        if (baud > 0) {  // Avoid underflow
+            baud -= 1;
+        }
+        if (baud > 255) { // Avoid overflow
+            baud = 255;
+        }
         spi->SPI.BAUD.reg = baud; // Set Baud
 
         // Enable RXC interrupt only if miso is defined
@@ -246,7 +255,7 @@ STATIC mp_obj_t machine_spi_make_new(const mp_obj_type_t *type, size_t n_args, s
     self->sck = 0xff;
 
     self->new = true;
-    sercom_table[spi_id] = self;
+    MP_STATE_PORT(sercom_table[spi_id]) = self;
 
     mp_map_t kw_args;
     mp_map_init_fixed_table(&kw_args, n_kw, args + n_args);
@@ -254,18 +263,14 @@ STATIC mp_obj_t machine_spi_make_new(const mp_obj_type_t *type, size_t n_args, s
     return self;
 }
 
-void sercom_deinit_all(void) {
-    for (int i = 0; i < SERCOM_INST_NUM; i++) {
-        if (sercom_table[i] != NULL) {
-            machine_spi_obj_t *self = sercom_table[i];
-            Sercom *spi = sercom_instance[self->id];
-            // Disable interrupts (if any)
-            spi->SPI.INTENCLR.reg = 0xff;
-            // clear table entry of spi
-            sercom_table[i] = NULL;
-            sercom_enable(spi, 0);
-        }
-    }
+STATIC void machine_sercom_deinit(mp_obj_base_t *self_in) {
+    machine_spi_obj_t *self = MP_OBJ_TO_PTR(self_in);
+    Sercom *spi = sercom_instance[self->id];
+    // Disable interrupts (if any)
+    spi->SPI.INTENCLR.reg = 0xff;
+    sercom_enable(spi, 0);
+    // clear table entry of spi
+    MP_STATE_PORT(sercom_table[self->id]) = NULL;
 }
 
 STATIC void machine_spi_transfer(mp_obj_base_t *self_in, size_t len, const uint8_t *src, uint8_t *dest) {
@@ -284,7 +289,7 @@ STATIC void machine_spi_transfer(mp_obj_base_t *self_in, size_t len, const uint8
         if (self->miso == 0xff) {
             mp_raise_ValueError(MP_ERROR_TEXT("read is not enabled"));
         }
-        spi->SPI.INTENSET.bit.RXC = 1;
+        spi->SPI.INTENSET.reg = SERCOM_SPI_INTENSET_RXC;
         self->dest = dest;
         self->rxlen = len;
     }
@@ -305,7 +310,7 @@ STATIC void machine_spi_transfer(mp_obj_base_t *self_in, size_t len, const uint8
             timeout--;
             MICROPY_EVENT_POLL_HOOK
         }
-        spi->SPI.INTENCLR.bit.RXC = 1;
+        spi->SPI.INTENCLR.reg = SERCOM_SPI_INTENCLR_RXC;
     } else {
         // Wait for the data being shifted out.
         while (!spi->SPI.INTFLAG.bit.TXC) {
@@ -316,6 +321,7 @@ STATIC void machine_spi_transfer(mp_obj_base_t *self_in, size_t len, const uint8
 
 STATIC const mp_machine_spi_p_t machine_spi_p = {
     .init = machine_spi_init,
+    .deinit = machine_sercom_deinit,
     .transfer = machine_spi_transfer,
 };
 
@@ -328,3 +334,5 @@ MP_DEFINE_CONST_OBJ_TYPE(
     protocol, &machine_spi_p,
     locals_dict, &mp_machine_spi_locals_dict
     );
+
+#endif

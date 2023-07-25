@@ -17,7 +17,7 @@ ifeq ($(BOARD),netduino2)
 CFLAGS += -mthumb -mcpu=cortex-m3 -mfloat-abi=soft
 CFLAGS += -DQEMU_SOC_STM32
 LDSCRIPT = stm32.ld
-SRC_BOARD_O = shared/runtime/gchelper_native.o shared/runtime/gchelper_m3.o
+SRC_BOARD_O = shared/runtime/gchelper_native.o shared/runtime/gchelper_thumb2.o
 MPY_CROSS_FLAGS += -march=armv7m
 endif
 
@@ -26,7 +26,7 @@ CFLAGS += -mthumb -mcpu=cortex-m0 -mfloat-abi=soft
 CFLAGS += -DQEMU_SOC_NRF51
 LDSCRIPT = nrf51.ld
 QEMU_EXTRA = -global nrf51-soc.flash-size=1048576 -global nrf51-soc.sram-size=262144
-SRC_BOARD_O = shared/runtime/gchelper_native.o shared/runtime/gchelper_m0.o
+SRC_BOARD_O = shared/runtime/gchelper_native.o shared/runtime/gchelper_thumb1.o
 MPY_CROSS_FLAGS += -march=armv7m
 endif
 
@@ -34,7 +34,7 @@ ifeq ($(BOARD),mps2-an385)
 CFLAGS += -mthumb -mcpu=cortex-m3 -mfloat-abi=soft
 CFLAGS += -DQEMU_SOC_MPS2
 LDSCRIPT = mps2.ld
-SRC_BOARD_O = shared/runtime/gchelper_native.o shared/runtime/gchelper_m3.o
+SRC_BOARD_O = shared/runtime/gchelper_native.o shared/runtime/gchelper_thumb2.o
 MPY_CROSS_FLAGS += -march=armv7m
 endif
 
@@ -132,12 +132,6 @@ OBJ = $(OBJ_COMMON) $(OBJ_RUN) $(OBJ_TEST)
 
 # List of sources for qstr extraction
 SRC_QSTR += $(SRC_COMMON_C) $(SRC_RUN_C) $(LIB_SRC_C)
-
-ifneq ($(FROZEN_MANIFEST),)
-CFLAGS += -DMICROPY_MODULE_FROZEN_STR
-CFLAGS += -DMICROPY_MODULE_FROZEN_MPY
-CFLAGS += -DMICROPY_QSTR_EXTRA_POOL=mp_qstr_frozen_const_pool
-endif
 
 all: run
 

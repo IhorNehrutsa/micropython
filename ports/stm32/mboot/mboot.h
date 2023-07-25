@@ -82,7 +82,7 @@
 #define MBOOT_ADDRESS_SPACE_64BIT (0)
 #endif
 
-// These values are used in initial_r0 to enter mboot programatically.
+// These values are used in initial_r0 to enter mboot programmatically.
 #define MBOOT_INITIAL_R0_KEY (0x70ad0000)
 #define MBOOT_INITIAL_R0_KEY_FSLOAD (MBOOT_INITIAL_R0_KEY | 0x80)
 
@@ -169,6 +169,7 @@ typedef uint32_t mboot_addr_t;
 
 extern volatile uint32_t systick_ms;
 extern uint8_t _estack[ELEM_DATA_SIZE];
+extern int32_t first_writable_flash_sector;
 
 void systick_init(void);
 void led_init(void);

@@ -1,9 +1,7 @@
 # Pin rows contain Pin number and pin name.
 # Pin rows start with PIN_
-# LED rows start with LED_
 # If the pin name is omitted, the pin number is added as name.
-# Rows for empty entries have to start with '-'
-# Empty lines and lines not starting with PIN_ or LED_ are ignored
+# Empty lines and lines not starting with PIN_ are ignored
 
 PIN_PA11,D0
 PIN_PA10,D1
@@ -11,9 +9,7 @@ PIN_PA14,D2
 PIN_PA09,D3
 PIN_PA08,D4
 PIN_PA15,D5
--
 PIN_PA21,D7
--
 PIN_PA07,D9
 PIN_PA18,D10
 PIN_PA16,D11
@@ -37,4 +33,8 @@ PIN_PB03,FLASH_MISO
 PIN_PB23,FLASH_SCK
 PIN_PA27,FLASH_CS
 
-LED_PA17,LED
+PIN_PA24,USB_DM
+PIN_PA25,USB_DP
+
+PIN_PA30,SWCLK
+PIN_PA31,SWDIO

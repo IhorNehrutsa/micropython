@@ -18,7 +18,9 @@ prepare_script_for_target = __import__("run-tests").prepare_script_for_target
 # Paths for host executables
 if os.name == "nt":
     CPYTHON3 = os.getenv("MICROPY_CPYTHON3", "python3.exe")
-    MICROPYTHON = os.getenv("MICROPY_MICROPYTHON", "../ports/windows/micropython.exe")
+    MICROPYTHON = os.getenv(
+        "MICROPY_MICROPYTHON", "../ports/windows/build-standard/micropython.exe"
+    )
 else:
     CPYTHON3 = os.getenv("MICROPY_CPYTHON3", "python3")
     MICROPYTHON = os.getenv("MICROPY_MICROPYTHON", "../ports/unix/build-standard/micropython")
@@ -107,8 +109,9 @@ def run_benchmarks(args, target, param_n, param_m, n_average, test_list):
             continue
 
         # Create test script
+        test_script = b"import sys\nsys.path.remove('')\n\n"
         with open(test_file, "rb") as f:
-            test_script = f.read()
+            test_script += f.read()
         with open(BENCH_SCRIPT_DIR + "benchrun.py", "rb") as f:
             test_script += f.read()
         test_script += b"bm_run(%u, %u)\n" % (param_n, param_m)
@@ -258,6 +261,7 @@ def main():
     cmd_parser.add_argument(
         "--emit", default="bytecode", help="MicroPython emitter to use (bytecode or native)"
     )
+    cmd_parser.add_argument("--heapsize", help="heapsize to use (use default if not specified)")
     cmd_parser.add_argument("--via-mpy", action="store_true", help="compile code to .mpy first")
     cmd_parser.add_argument("--mpy-cross-flags", default="", help="flags to pass to mpy-cross")
     cmd_parser.add_argument(
@@ -285,6 +289,8 @@ def main():
         target.enter_raw_repl()
     else:
         target = [MICROPYTHON, "-X", "emit=" + args.emit]
+        if args.heapsize is not None:
+            target.extend(["-X", "heapsize=" + args.heapsize])
 
     if len(args.files) == 0:
         tests_skip = ("benchrun.py",)

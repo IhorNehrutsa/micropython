@@ -30,6 +30,7 @@
 #include "py/mpconfig.h"
 #include "py/mperrno.h"
 #include "py/mphal.h"
+#include "extmod/modnetwork.h"
 #include "pendsv.h"
 
 #define CYW43_WIFI_NVRAM_INCLUDE_FILE   "wifi_nvram_43439.h"
@@ -47,8 +48,17 @@
 #define CYW43_THREAD_EXIT               MICROPY_PY_LWIP_EXIT
 #define CYW43_THREAD_LOCK_CHECK
 
-#define CYW43_SDPCM_SEND_COMMON_WAIT    __WFI();
-#define CYW43_DO_IOCTL_WAIT             __WFI();
+#define CYW43_HOST_NAME                 mod_network_hostname
+
+#define CYW43_SDPCM_SEND_COMMON_WAIT \
+    if (get_core_num() == 0) { \
+        cyw43_yield(); \
+    } \
+
+#define CYW43_DO_IOCTL_WAIT \
+    if (get_core_num() == 0) { \
+        cyw43_yield(); \
+    } \
 
 #define CYW43_ARRAY_SIZE(a)             MP_ARRAY_SIZE(a)
 
@@ -80,7 +90,25 @@
 
 #define cyw43_schedule_internal_poll_dispatch(func) pendsv_schedule_dispatch(PENDSV_DISPATCH_CYW43, func)
 
+// Bluetooth uses the C heap to load its firmware (provided by pico-sdk).
+// Space is reserved for this, see MICROPY_C_HEAP_SIZE.
+#ifndef cyw43_malloc
+#define cyw43_malloc malloc
+#endif
+#ifndef cyw43_free
+#define cyw43_free free
+#endif
+
 void cyw43_post_poll_hook(void);
+extern volatile int cyw43_has_pending;
+
+static inline void cyw43_yield(void) {
+    uint32_t my_interrupts = save_and_disable_interrupts();
+    if (!cyw43_has_pending) {
+        __WFI();
+    }
+    restore_interrupts(my_interrupts);
+}
 
 static inline void cyw43_delay_us(uint32_t us) {
     uint32_t start = mp_hal_ticks_us();
@@ -92,7 +120,7 @@ static inline void cyw43_delay_ms(uint32_t ms) {
     uint32_t us = ms * 1000;
     int32_t start = mp_hal_ticks_us();
     while (mp_hal_ticks_us() - start < us) {
-        __WFI();
+        cyw43_yield();
         MICROPY_EVENT_POLL_HOOK_FAST;
     }
 }

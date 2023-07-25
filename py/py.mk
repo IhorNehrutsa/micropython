@@ -80,6 +80,7 @@ PY_CORE_O_BASENAME = $(addprefix py/,\
 	nlrx64.o \
 	nlrthumb.o \
 	nlraarch64.o \
+	nlrmips.o \
 	nlrpowerpc.o \
 	nlrxtensa.o \
 	nlrsetjmp.o \
@@ -184,7 +185,7 @@ PY_CORE_O_BASENAME = $(addprefix py/,\
 	modmicropython.o \
 	modstruct.o \
 	modsys.o \
-	moduerrno.o \
+	moderrno.o \
 	modthread.o \
 	vm.o \
 	bc.o \

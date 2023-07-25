@@ -25,9 +25,12 @@
  * THE SOFTWARE.
  */
 
+#include "py/runtime.h"
+
+#if MICROPY_PY_MACHINE_ADC
+
 #include <stdint.h>
 #include "py/obj.h"
-#include "py/runtime.h"
 #include "py/mphal.h"
 
 #include "sam.h"
@@ -40,10 +43,39 @@ typedef struct _machine_adc_obj_t {
     uint8_t id;
     uint8_t avg;
     uint8_t bits;
+    uint8_t vref;
 } machine_adc_obj_t;
 
 #define DEFAULT_ADC_BITS    12
 #define DEFAULT_ADC_AVG     16
+
+#if defined(MCU_SAMD21)
+static uint8_t adc_vref_table[] = {
+    ADC_REFCTRL_REFSEL_INT1V_Val, ADC_REFCTRL_REFSEL_INTVCC0_Val,
+    ADC_REFCTRL_REFSEL_INTVCC1_Val, ADC_REFCTRL_REFSEL_AREFA_Val, ADC_REFCTRL_REFSEL_AREFB_Val
+};
+#if MICROPY_HW_ADC_VREF
+#define DEFAULT_ADC_VREF    MICROPY_HW_ADC_VREF
+#else
+#define DEFAULT_ADC_VREF    (3)
+#endif
+
+#define ADC_EVSYS_CHANNEL    0
+
+#elif defined(MCU_SAMD51)
+
+static uint8_t adc_vref_table[] = {
+    ADC_REFCTRL_REFSEL_INTREF_Val, ADC_REFCTRL_REFSEL_INTVCC1_Val,
+    ADC_REFCTRL_REFSEL_INTVCC0_Val, ADC_REFCTRL_REFSEL_AREFA_Val,
+    ADC_REFCTRL_REFSEL_AREFB_Val, ADC_REFCTRL_REFSEL_AREFC_Val
+};
+#if MICROPY_HW_ADC_VREF
+#define DEFAULT_ADC_VREF    MICROPY_HW_ADC_VREF
+#else
+#define DEFAULT_ADC_VREF    (3)
+#endif
+
+#endif  // defined(MCU_SAMD21)
 
 Adc *const adc_bases[] = ADC_INSTS;
 uint32_t busy_flags = 0;
@@ -53,37 +85,31 @@ static uint8_t resolution[] = {
     ADC_CTRLB_RESSEL_8BIT_Val, ADC_CTRLB_RESSEL_10BIT_Val, ADC_CTRLB_RESSEL_12BIT_Val
 };
 
-// Calculate the floor value of log2(n)
-mp_int_t log2i(mp_int_t num) {
-    mp_int_t res = 0;
-    for (; num > 1; num >>= 1) {
-        res += 1;
-    }
-    return res;
-}
+extern mp_int_t log2i(mp_int_t num);
 
 STATIC void adc_obj_print(const mp_print_t *print, mp_obj_t o, mp_print_kind_t kind) {
     (void)kind;
     machine_adc_obj_t *self = MP_OBJ_TO_PTR(o);
 
-    mp_printf(print, "ADC(P%c%02u, ADC%u, channel=%u, bits=%u, average=%u)",
-        "ABCD"[self->id / 32], self->id % 32, self->adc_config.device,
-        self->adc_config.channel, self->bits, 1 << self->avg);
+    mp_printf(print, "ADC(%s, device=%u, channel=%u, bits=%u, average=%u, vref=%d)",
+        pin_name(self->id), self->adc_config.device,
+        self->adc_config.channel, self->bits, 1 << self->avg, self->vref);
 }
 
 STATIC mp_obj_t adc_obj_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *all_args) {
-    enum { ARG_id, ARG_bits, ARG_average };
+    enum { ARG_id, ARG_bits, ARG_average, ARG_vref };
     static const mp_arg_t allowed_args[] = {
         { MP_QSTR_id,       MP_ARG_REQUIRED | MP_ARG_OBJ },
         { MP_QSTR_bits,     MP_ARG_INT, {.u_int = DEFAULT_ADC_BITS} },
         { MP_QSTR_average,  MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = DEFAULT_ADC_AVG} },
+        { MP_QSTR_vref,     MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = DEFAULT_ADC_VREF} },
     };
 
     // Parse the arguments.
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all_kw_array(n_args, n_kw, all_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
-    // Unpack and check, whther the pin has ADC capability
+    // Unpack and check, whether the pin has ADC capability
     int id = mp_hal_get_pin_obj(args[ARG_id].u_obj);
     adc_config_t adc_config = get_adc_config(id, busy_flags);
 
@@ -99,8 +125,14 @@ STATIC mp_obj_t adc_obj_make_new(const mp_obj_type_t *type, size_t n_args, size_
     uint32_t avg = log2i(args[ARG_average].u_int);
     self->avg = (avg <= 10 ? avg : 10);
 
+    uint8_t vref = args[ARG_vref].u_int;
+    if (0 <= vref && vref < sizeof(adc_vref_table)) {
+        self->vref = vref;
+    }
+
     // flag the device/channel as being in use.
     busy_flags |= (1 << (self->adc_config.device * 16 + self->adc_config.channel));
+    init_flags[self->adc_config.device] = false;
 
     adc_init(self);
 
@@ -111,6 +143,8 @@ STATIC mp_obj_t adc_obj_make_new(const mp_obj_type_t *type, size_t n_args, size_
 STATIC mp_obj_t machine_adc_read_u16(mp_obj_t self_in) {
     machine_adc_obj_t *self = MP_OBJ_TO_PTR(self_in);
     Adc *adc = adc_bases[self->adc_config.device];
+    // Set the reference voltage. Default: external AREFA.
+    adc->REFCTRL.reg = adc_vref_table[self->vref];
     // Set Input channel and resolution
     // Select the pin as positive input and gnd as negative input reference, non-diff mode by default
     adc->INPUTCTRL.reg = ADC_INPUTCTRL_MUXNEG_GND | self->adc_config.channel;
@@ -183,7 +217,7 @@ static void adc_init(machine_adc_obj_t *self) {
         // Divide 48MHz clock by 32 to obtain 1.5 MHz clock to adc
         adc->CTRLB.reg = ADC_CTRLB_PRESCALER_DIV32;
         // Select external AREFA as reference voltage.
-        adc->REFCTRL.reg = ADC_REFCTRL_REFSEL_AREFA;
+        adc->REFCTRL.reg = adc_vref_table[self->vref];
         // Average: Accumulate samples and scale them down accordingly
         adc->AVGCTRL.reg = self->avg | ADC_AVGCTRL_ADJRES(self->avg);
         // Enable ADC and wait to be ready
@@ -222,8 +256,8 @@ static void adc_init(machine_adc_obj_t *self) {
         adc->CALIB.reg = ADC_CALIB_BIASCOMP(biascomp) | ADC_CALIB_BIASR2R(biasr2r) | ADC_CALIB_BIASREFBUF(biasrefbuf);
         // Divide 48MHz clock by 32 to obtain 1.5 MHz clock to adc
         adc->CTRLA.reg = ADC_CTRLA_PRESCALER_DIV32;
-        // Select external AREFA as reference voltage.
-        adc->REFCTRL.reg = ADC_REFCTRL_REFSEL_AREFA;
+        // Set the reference voltage. Default: external AREFA.
+        adc->REFCTRL.reg = adc_vref_table[self->vref];
         // Average: Accumulate samples and scale them down accordingly
         adc->AVGCTRL.reg = self->avg | ADC_AVGCTRL_ADJRES(self->avg);
         // Enable ADC and wait to be ready
@@ -236,3 +270,5 @@ static void adc_init(machine_adc_obj_t *self) {
     // Set the port as given in self->id as ADC
     mp_hal_set_pin_mux(self->id, ALT_FCT_ADC);
 }
+
+#endif

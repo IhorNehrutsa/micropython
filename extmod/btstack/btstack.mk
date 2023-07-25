@@ -6,6 +6,7 @@ GIT_SUBMODULES += lib/btstack
 
 MICROPY_BLUETOOTH_BTSTACK_USB ?= 0
 MICROPY_BLUETOOTH_BTSTACK_H4 ?= 1
+MICROPY_BLUETOOTH_BTSTACK_CONFIG_FILE ?= '"extmod/btstack/btstack_config_common.h"'
 
 BTSTACK_EXTMOD_DIR = extmod/btstack
 
@@ -14,6 +15,7 @@ SRC_EXTMOD_C += $(BTSTACK_EXTMOD_DIR)/modbluetooth_btstack.c
 INC += -I$(TOP)/$(BTSTACK_EXTMOD_DIR)
 
 CFLAGS_EXTMOD += -DMICROPY_BLUETOOTH_BTSTACK=1
+CFLAGS_EXTMOD += -DMICROPY_BLUETOOTH_BTSTACK_CONFIG_FILE=$(MICROPY_BLUETOOTH_BTSTACK_CONFIG_FILE)
 CFLAGS_EXTMOD += -DMICROPY_PY_BLUETOOTH_USE_SYNC_EVENTS=1
 CFLAGS_EXTMOD += -DMICROPY_PY_BLUETOOTH_ENABLE_PAIRING_BONDING=1
 
@@ -33,6 +35,7 @@ INC += -I$(BTSTACK_DIR)/3rd-party/yxml
 SRC_BTSTACK_C = \
 	$(addprefix lib/btstack/src/, $(SRC_FILES)) \
 	$(addprefix lib/btstack/src/ble/, $(filter-out %_tlv.c, $(SRC_BLE_FILES))) \
+	lib/btstack/platform/embedded/hci_dump_embedded_stdout.c \
 
 ifeq ($(MICROPY_BLUETOOTH_BTSTACK_USB),1)
 ifeq ($(MICROPY_BLUETOOTH_BTSTACK_H4),1)

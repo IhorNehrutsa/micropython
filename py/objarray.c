@@ -53,6 +53,7 @@
 #if MICROPY_PY_BUILTINS_MEMORYVIEW
 #define TYPECODE_MASK (0x7f)
 #define memview_offset free
+#define memview_offset_max ((1LL << MP_OBJ_ARRAY_FREE_SIZE_BITS) - 1)
 #else
 // make (& TYPECODE_MASK) a null operation if memorview not enabled
 #define TYPECODE_MASK (~(size_t)0)
@@ -192,6 +193,14 @@ STATIC mp_obj_t bytearray_make_new(const mp_obj_type_t *type_in, size_t n_args, 
         return MP_OBJ_FROM_PTR(o);
     } else {
         // 1 arg: construct the bytearray from that
+        if (mp_obj_is_str(args[0]) && n_args == 1) {
+            #if MICROPY_ERROR_REPORTING <= MICROPY_ERROR_REPORTING_TERSE
+            // Match bytes_make_new.
+            mp_raise_TypeError(MP_ERROR_TEXT("wrong number of arguments"));
+            #else
+            mp_raise_TypeError(MP_ERROR_TEXT("string argument without an encoding"));
+            #endif
+        }
         return array_construct(BYTEARRAY_TYPECODE, args[0]);
     }
 }
@@ -283,6 +292,12 @@ STATIC mp_obj_t array_binary_op(mp_binary_op_t op, mp_obj_t lhs_in, mp_obj_t rhs
     mp_obj_array_t *lhs = MP_OBJ_TO_PTR(lhs_in);
     switch (op) {
         case MP_BINARY_OP_ADD: {
+            #if MICROPY_PY_BUILTINS_MEMORYVIEW
+            if (lhs->base.type == &mp_type_memoryview) {
+                return MP_OBJ_NULL; // op not supported
+            }
+            #endif
+
             // allow to add anything that has the buffer protocol (extension to CPython)
             mp_buffer_info_t lhs_bufinfo;
             mp_buffer_info_t rhs_bufinfo;
@@ -514,6 +529,9 @@ STATIC mp_obj_t array_subscr(mp_obj_t self_in, mp_obj_t index_in, mp_obj_t value
             assert(sz > 0);
             #if MICROPY_PY_BUILTINS_MEMORYVIEW
             if (o->base.type == &mp_type_memoryview) {
+                if (slice.start > memview_offset_max) {
+                    mp_raise_msg(&mp_type_OverflowError, MP_ERROR_TEXT("memoryview offset too large"));
+                }
                 res = m_new_obj(mp_obj_array_t);
                 *res = *o;
                 res->memview_offset += slice.start;

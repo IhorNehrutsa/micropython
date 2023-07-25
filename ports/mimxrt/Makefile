@@ -2,15 +2,27 @@
 # Parameter Configuration
 # =============================================================================
 
+# Select the board to build for:
+ifdef BOARD_DIR
+# Custom board path - remove trailing slash and get the final component of
+# the path as the board name.
+BOARD ?= $(notdir $(BOARD_DIR:/=))
+else
+# If not given on the command line, then default to TEENSY40.
 BOARD ?= TEENSY40
 BOARD_DIR ?= boards/$(BOARD)
+endif
+
+ifeq ($(wildcard $(BOARD_DIR)/.),)
+    $(error Invalid BOARD specified: $(BOARD_DIR))
+endif
+
 BUILD ?= build-$(BOARD)
 PORT ?= /dev/ttyACM0
 CROSS_COMPILE ?= arm-none-eabi-
 GIT_SUBMODULES += lib/tinyusb lib/nxp_driver
 
 # MicroPython feature configurations
-FROZEN_MANIFEST ?= boards/manifest.py
 MICROPY_VFS_LFS2 ?= 1
 MICROPY_VFS_FAT ?= 1
 
@@ -26,10 +38,13 @@ MAKE_FLEXRAM_LD = boards/make-flexram-config.py
 include ../../py/mkenv.mk
 
 # Include micropython configuration board makefile
-ifeq ($(wildcard $(BOARD_DIR)/.),)
-    $(error Invalid BOARD specified: $(BOARD_DIR))
-endif
 include $(BOARD_DIR)/mpconfigboard.mk
+
+# MicroPython feature configurations
+MICROPY_ROM_TEXT_COMPRESSION ?= 1
+
+# File containing description of content to be frozen into firmware.
+FROZEN_MANIFEST ?= boards/manifest.py
 
 # Include py core make definitions
 include $(TOP)/py/py.mk
@@ -101,13 +116,12 @@ SRC_ETH_C += \
 	hal/phy/device/phydp83848/fsl_phydp83848.c \
 	hal/phy/device/phyksz8081/fsl_phyksz8081.c \
 	hal/phy/device/phylan8720/fsl_phylan8720.c \
+	hal/phy/device/phyrtl8211f/fsl_phyrtl8211f.c \
 	hal/phy/mdio/enet/fsl_enet_mdio.c
 endif
 
 # NXP SDK sources
 SRC_HAL_IMX_C += \
-	$(MCU_DIR)/drivers/fsl_adc.c \
-	$(MCU_DIR)/drivers/fsl_cache.c \
 	$(MCU_DIR)/drivers/fsl_clock.c \
 	$(MCU_DIR)/drivers/fsl_common.c \
 	$(MCU_DIR)/drivers/fsl_dmamux.c \
@@ -124,10 +138,15 @@ SRC_HAL_IMX_C += \
 	$(MCU_DIR)/drivers/fsl_pwm.c \
 	$(MCU_DIR)/drivers/fsl_sai.c \
 	$(MCU_DIR)/drivers/fsl_snvs_lp.c \
-	$(MCU_DIR)/drivers/fsl_trng.c \
 	$(MCU_DIR)/drivers/fsl_wdog.c \
-	$(MCU_DIR)/system_$(MCU_SERIES).c \
-	hal/fsl_flexspi_nor_boot.c \
+	$(MCU_DIR)/system_$(MCU_SERIES)$(MCU_CORE).c \
+
+# Use a specific boot header for 1062 so the Teensy loader doesn't erase the filesystem.
+ifeq ($(MCU_SERIES), MIMXRT1062)
+SRC_HAL_IMX_C += hal/fsl_flexspi_nor_boot.c
+else
+SRC_HAL_IMX_C += $(MCU_DIR)/xip/fsl_flexspi_nor_boot.c
+endif
 
 ifeq ($(MICROPY_HW_SDRAM_AVAIL),1)
 SRC_HAL_IMX_C += $(MCU_DIR)/drivers/fsl_semc.c
@@ -137,9 +156,28 @@ ifeq ($(MICROPY_PY_MACHINE_SDCARD),1)
 SRC_HAL_IMX_C += $(MCU_DIR)/drivers/fsl_usdhc.c
 endif
 
-ifeq ($(MCU_SERIES),$(filter $(MCU_SERIES), MIMXRT1015 MIMXRT1021 MIMXRT1052 MIMXRT1062 MIMXRT1064))
+ifeq ($(MCU_SERIES),$(filter $(MCU_SERIES), MIMXRT1015 MIMXRT1021 MIMXRT1052 MIMXRT1062 MIMXRT1064 MIMXRT1176))
 SRC_HAL_IMX_C += \
-	$(MCU_DIR)/drivers/fsl_qtmr.c
+	$(MCU_DIR)/drivers/fsl_qtmr.c \
+	$(MCU_DIR)/drivers/fsl_romapi.c
+endif
+
+ifeq ($(MCU_SERIES), MIMXRT1176)
+INC += -I$(TOP)/$(MCU_DIR)/drivers/cm7
+
+SRC_HAL_IMX_C += \
+	$(MCU_DIR)/drivers/cm7/fsl_cache.c \
+	$(MCU_DIR)/drivers/fsl_dcdc.c \
+	$(MCU_DIR)/drivers/fsl_pmu.c \
+	$(MCU_DIR)/drivers/fsl_common_arm.c \
+	$(MCU_DIR)/drivers/fsl_anatop_ai.c \
+	$(MCU_DIR)/drivers/fsl_caam.c \
+	$(MCU_DIR)/drivers/fsl_lpadc.c
+else
+SRC_HAL_IMX_C += \
+	$(MCU_DIR)/drivers/fsl_adc.c \
+	$(MCU_DIR)/drivers/fsl_cache.c \
+	$(MCU_DIR)/drivers/fsl_trng.c
 endif
 
 # C source files
@@ -151,7 +189,9 @@ SRC_C += \
 	drivers/dht/dht.c \
 	eth.c \
 	fatfs_port.c \
+	flash.c \
 	hal/pwm_backport.c \
+	help.c \
 	led.c \
 	machine_adc.c \
 	machine_bitstream.c \
@@ -162,7 +202,6 @@ SRC_C += \
 	machine_rtc.c \
 	machine_sdcard.c \
 	machine_spi.c \
-	machine_timer.c \
 	machine_uart.c \
 	machine_wdt.c \
 	main.c \
@@ -171,7 +210,6 @@ SRC_C += \
 	mimxrt_sdram.c \
 	modmachine.c \
 	modmimxrt.c \
-	modutime.c \
 	mphalport.c \
 	mpnetworkport.c \
 	network_lan.c \
@@ -193,23 +231,36 @@ SHARED_SRC_C += \
 	shared/runtime/interrupt_char.c \
 	shared/runtime/mpirq.c \
 	shared/runtime/pyexec.c \
+	shared/runtime/softtimer.c \
 	shared/runtime/stdout_helpers.c \
 	shared/runtime/sys_stdio_mphal.c \
 	shared/timeutils/timeutils.c \
 
-# Add sources for respective board flash type
-ifeq ($(MICROPY_HW_FLASH_TYPE),$(filter $(MICROPY_HW_FLASH_TYPE),qspi_nor_flash qspi_hyper_flash))
-    # Add hal/flexspi_nor_flash.c or hal/flashspi_hyper_flash.c respectively
-    SRC_HAL_C += hal/flexspi_$(subst qspi_,,$(MICROPY_HW_FLASH_TYPE)).c
-    #
-    # Add custom (board specific) or default configuration
-    ifeq ($(MICROPY_HW_BOARD_FLASH_FILES),1)
-        SRC_HAL_C += $(BOARD_DIR)/$(MICROPY_HW_FLASH_TYPE)_config.c
-    else
-        SRC_HAL_C += hal/$(MICROPY_HW_FLASH_TYPE)_config.c
-    endif
+# Set flash driver name, base address and internal flash flag, based on the flash type.
+ifeq ($(MICROPY_HW_FLASH_TYPE),$(filter $(MICROPY_HW_FLASH_TYPE),qspi_nor_flash))
+    MICROPY_HW_FLASH_BASE = 0x60000000
+    FLEXSPI_FLASH_TYPE = $(MICROPY_HW_FLASH_TYPE)
+else ifeq ($(MICROPY_HW_FLASH_TYPE),$(filter $(MICROPY_HW_FLASH_TYPE),qspi_hyper_flash))
+    MICROPY_HW_FLASH_BASE = 0x60000000
+    FLEXSPI_FLASH_TYPE = $(MICROPY_HW_FLASH_TYPE)
+else ifeq ($(MICROPY_HW_FLASH_TYPE),$(filter $(MICROPY_HW_FLASH_TYPE),internal))
+    # The internal flash is an SPI NOR Flash.
+    MICROPY_HW_FLASH_BASE = 0x70000000
+    FLEXSPI_FLASH_TYPE = qspi_nor_flash
+    CFLAGS += -DMICROPY_HW_FLASH_INTERNAL
 else
     $(error Error: Unknown board flash type $(MICROPY_HW_FLASH_TYPE))
+endif
+
+# Add sources for respective board flash type
+# Add hal/flexspi_nor_flash.c or hal/flashspi_hyper_flash.c respectively
+SRC_HAL_C += hal/flexspi_$(subst qspi_,,$(FLEXSPI_FLASH_TYPE)).c
+#
+# Add custom (board specific) or default configuration
+ifeq ($(MICROPY_HW_BOARD_FLASH_FILES),1)
+    SRC_HAL_C += $(BOARD_DIR)/$(FLEXSPI_FLASH_TYPE)_config.c
+else
+    SRC_HAL_C += hal/$(FLEXSPI_FLASH_TYPE)_config.c
 endif
 
 # Math library source files
@@ -243,10 +294,10 @@ SUPPORTS_HARDWARE_FP_DOUBLE = 0
 
 # Assembly source files
 SRC_SS = \
-	$(MCU_DIR)/gcc/startup_$(MCU_SERIES).S \
+	$(MCU_DIR)/gcc/startup_$(MCU_SERIES)$(MCU_CORE).S \
 	hal/resethandler_MIMXRT10xx.S
 
-SRC_S += shared/runtime/gchelper_m3.s \
+SRC_S += shared/runtime/gchelper_thumb2.s \
 
 # =============================================================================
 # QSTR Sources
@@ -262,6 +313,8 @@ SRC_QSTR += $(SRC_C) $(SHARED_SRC_C) $(GEN_PINS_SRC)
 CFLAGS += -g  # always include debug info in the ELF
 ifeq ($(DEBUG),1)
 CFLAGS += -Og
+# Disable text compression in debug builds
+MICROPY_ROM_TEXT_COMPRESSION = 0
 else
 CFLAGS += -Os -DNDEBUG
 endif
@@ -279,11 +332,11 @@ CFLAGS += \
 	-D__STARTUP_INITIALIZE_RAMFUNCTION \
 	-DBOARD_$(BOARD) \
 	-DBOARD_FLASH_SIZE=$(MICROPY_HW_FLASH_SIZE) \
-	-DCFG_TUSB_MCU=OPT_MCU_MIMXRT10XX \
+	-DCFG_TUSB_MCU=OPT_MCU_MIMXRT \
 	-DCLOCK_CONFIG_H='<boards/$(MCU_SERIES)_clock_config.h>' \
-	-DCPU_$(MCU_SERIES) \
+	-DCPU_$(MCU_SERIES)$(MCU_CORE) \
 	-DCPU_$(MCU_VARIANT) \
-	-DCPU_HEADER_H='<$(MCU_SERIES).h>' \
+	-DCPU_HEADER_H='<$(MCU_SERIES)$(MCU_CORE).h>' \
 	-DFSL_SDK_ENABLE_DRIVER_CACHE_CONTROL=1 \
 	-DI2C_RETRY_TIMES=1000000 \
 	-DMICROPY_HW_FLASH_SIZE=$(MICROPY_HW_FLASH_SIZE) \
@@ -308,18 +361,14 @@ CFLAGS += \
 	-Wno-error=unused-parameter
 
 # Configure respective board flash type
-ifeq ($(MICROPY_HW_FLASH_TYPE),$(filter $(MICROPY_HW_FLASH_TYPE),qspi_nor_flash qspi_hyper_flash))
-    # Add hal/flexspi_nor_flash.h or hal/flexspi_hyper_flash.h respectively
-    CFLAGS += -DBOARD_FLASH_OPS_HEADER_H=\"hal/flexspi_$(subst qspi_,,$(MICROPY_HW_FLASH_TYPE)).h\"
-    #
-    # Add custom (board specific) or default configuration
-    ifeq ($(MICROPY_HW_BOARD_FLASH_FILES),1)
-        CFLAGS += -DBOARD_FLASH_CONFIG_HEADER_H=\"$(BOARD)_flexspi_flash_config.h\"
-    else
-        CFLAGS += -DBOARD_FLASH_CONFIG_HEADER_H=\"hal/flexspi_flash_config.h\"
-    endif
+# Add hal/flexspi_nor_flash.h or hal/flexspi_hyper_flash.h respectively
+CFLAGS += -DBOARD_FLASH_OPS_HEADER_H=\"hal/flexspi_$(subst qspi_,,$(FLEXSPI_FLASH_TYPE)).h\"
+#
+# Add custom (board specific) or default configuration
+ifeq ($(MICROPY_HW_BOARD_FLASH_FILES),1)
+    CFLAGS += -DBOARD_FLASH_CONFIG_HEADER_H=\"$(BOARD)_flexspi_flash_config.h\"
 else
-    $(error Error: Unknown board flash type $(MICROPY_HW_FLASH_TYPE))
+    CFLAGS += -DBOARD_FLASH_CONFIG_HEADER_H=\"hal/flexspi_flash_config.h\"
 endif
 
 # Configure floating point support
@@ -345,11 +394,12 @@ endif
 # All settings for Ethernet support are controller by the value of MICROPY_PY_LWIP
 ifeq ($(MICROPY_PY_LWIP),1)
 CFLAGS += \
-	-DFSL_FEATURE_PHYKSZ8081_USE_RMII50M_MODE=1 \
-	-DMBEDTLS_CONFIG_FILE='"mbedtls/mbedtls_config.h"'
+	-DFSL_FEATURE_PHYKSZ8081_USE_RMII50M_MODE=1
 endif
 
 CFLAGS += $(CFLAGS_EXTRA)
+
+MPY_CROSS_FLAGS += -march=armv7m
 
 # =============================================================================
 # Linker Flags
@@ -365,7 +415,7 @@ LDFLAGS += \
 #	the C preprocessor. Therefore keep LDDEFINES separated from LDFLAGS!
 
 LDDEFINES = \
-	-DMICROPY_HW_FLASH_TYPE=$(MICROPY_HW_FLASH_TYPE) \
+	-DMICROPY_HW_FLASH_BASE=$(MICROPY_HW_FLASH_BASE) \
 	-DMICROPY_HW_FLASH_SIZE=$(MICROPY_HW_FLASH_SIZE)
 
 ifdef MICROPY_HW_FLASH_RESERVED
@@ -439,9 +489,8 @@ $(HEADER_BUILD)/qstrdefs.generated.h: $(BOARD_DIR)/mpconfigboard.h
 
 $(GEN_FLEXRAM_CONFIG_SRC):
 	$(ECHO) "Create $@"
-	$(Q)$(PYTHON) $(MAKE_FLEXRAM_LD) -d $(TOP)/$(MCU_DIR)/$(MCU_SERIES).h \
-		-f $(TOP)/$(MCU_DIR)/$(MCU_SERIES)_features.h -l boards/$(MCU_SERIES).ld -c $(MCU_SERIES) > $(GEN_FLEXRAM_CONFIG_SRC)
-
+	$(Q)$(PYTHON) $(MAKE_FLEXRAM_LD) -d $(TOP)/$(MCU_DIR)/$(MCU_SERIES)$(MCU_CORE).h \
+		-f $(TOP)/$(MCU_DIR)/$(MCU_SERIES)$(MCU_CORE)_features.h -l boards/$(MCU_SERIES).ld -c $(MCU_SERIES) > $(GEN_FLEXRAM_CONFIG_SRC)
 
 # Use a pattern rule here so that make will only call make-pins.py once to make
 # both pins_gen.c and pins.h

@@ -109,7 +109,7 @@ void mp_str_print_quoted(const mp_print_t *print, const byte *str_data, size_t s
     mp_printf(print, "%c", quote_char);
 }
 
-#if MICROPY_PY_UJSON
+#if MICROPY_PY_JSON
 void mp_str_print_json(const mp_print_t *print, const byte *str_data, size_t str_len) {
     // for JSON spec, see http://www.ietf.org/rfc/rfc4627.txt
     // if we are given a valid utf8-encoded string, we will print it in a JSON-conforming way
@@ -137,7 +137,7 @@ void mp_str_print_json(const mp_print_t *print, const byte *str_data, size_t str
 
 STATIC void str_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
     GET_STR_DATA_LEN(self_in, str_data, str_len);
-    #if MICROPY_PY_UJSON
+    #if MICROPY_PY_JSON
     if (kind == PRINT_JSON) {
         mp_str_print_json(print, str_data, str_len);
         return;
@@ -233,7 +233,11 @@ STATIC mp_obj_t bytes_make_new(const mp_obj_type_t *type_in, size_t n_args, size
 
     if (mp_obj_is_str(args[0])) {
         if (n_args < 2 || n_args > 3) {
+            #if MICROPY_ERROR_REPORTING <= MICROPY_ERROR_REPORTING_TERSE
             goto wrong_args;
+            #else
+            mp_raise_TypeError(MP_ERROR_TEXT("string argument without an encoding"));
+            #endif
         }
         GET_STR_DATA_LEN(args[0], str_data, str_len);
         GET_STR_HASH(args[0], str_hash);
@@ -399,7 +403,16 @@ mp_obj_t mp_obj_str_binary_op(mp_binary_op_t op, mp_obj_t lhs_in, mp_obj_t rhs_i
     } else {
         // LHS is str and RHS has an incompatible type
         // (except if operation is EQUAL, but that's handled by mp_obj_equal)
-        bad_implicit_conversion(rhs_in);
+
+        // CONTAINS must fail with a bad-implicit-conversion exception, because
+        // otherwise mp_binary_op() will fallback to `list(lhs).__contains__(rhs)`.
+        if (op == MP_BINARY_OP_CONTAINS) {
+            bad_implicit_conversion(rhs_in);
+        }
+
+        // All other operations are not supported, and may be handled by another
+        // type, eg for reverse operations.
+        return MP_OBJ_NULL;
     }
 
     switch (op) {
@@ -1114,7 +1127,7 @@ STATIC vstr_t mp_obj_str_format_helper(const char *str, const char *top, int *ar
                 arg = key_elem->value;
             }
             if (field_name < field_name_top) {
-                mp_raise_NotImplementedError(MP_ERROR_TEXT("attributes not supported yet"));
+                mp_raise_NotImplementedError(MP_ERROR_TEXT("attributes not supported"));
             }
         } else {
             if (*arg_i < 0) {

@@ -165,6 +165,8 @@ mp_obj_t mp_obj_int_unary_op(mp_unary_op_t op, mp_obj_t o_in) {
             mpz_abs_inpl(&self2->mpz, &self->mpz);
             return MP_OBJ_FROM_PTR(self2);
         }
+        case MP_UNARY_OP_INT_MAYBE:
+            return o_in;
         default:
             return MP_OBJ_NULL;      // op not supported
     }
@@ -296,8 +298,7 @@ mp_obj_t mp_obj_int_binary_op(mp_binary_op_t op, mp_obj_t lhs_in, mp_obj_t rhs_i
                 mpz_pow_inpl(&res->mpz, zlhs, zrhs);
                 break;
 
-            default: {
-                assert(op == MP_BINARY_OP_DIVMOD);
+            case MP_BINARY_OP_DIVMOD: {
                 if (mpz_is_zero(zrhs)) {
                     goto zero_division_error;
                 }
@@ -306,6 +307,9 @@ mp_obj_t mp_obj_int_binary_op(mp_binary_op_t op, mp_obj_t lhs_in, mp_obj_t rhs_i
                 mp_obj_t tuple[2] = {MP_OBJ_FROM_PTR(quo), MP_OBJ_FROM_PTR(res)};
                 return mp_obj_new_tuple(2, tuple);
             }
+
+            default:
+                return MP_OBJ_NULL; // op not supported
         }
 
         return MP_OBJ_FROM_PTR(res);

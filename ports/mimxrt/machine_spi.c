@@ -45,6 +45,14 @@
 #define DEFAULT_SPI_FIRSTBIT    (kLPSPI_MsbFirst)
 #define DEFAULT_SPI_DRIVE       (6)
 
+#define CLOCK_DIVIDER           (1)
+
+#if defined(MIMXRT117x_SERIES)
+#define LPSPI_DMAMUX            DMAMUX0
+#else
+#define LPSPI_DMAMUX            DMAMUX
+#endif
+
 #define MICROPY_HW_SPI_NUM MP_ARRAY_SIZE(spi_index_table)
 
 #define SCK (iomux_table[index])
@@ -232,17 +240,19 @@ STATIC void machine_spi_init(mp_obj_base_t *self_in, size_t n_args, const mp_obj
 STATIC void machine_spi_transfer(mp_obj_base_t *self_in, size_t len, const uint8_t *src, uint8_t *dest) {
     machine_spi_obj_t *self = (machine_spi_obj_t *)self_in;
 
-    // Wait a short while for the previous transfer to finish, but not forever
-    for (volatile int j = 0; (j < 5000) && ((self->spi_inst->SR & kLPSPI_ModuleBusyFlag) != 0); j++) {}
+    if (len > 0) {
+        // Wait a short while for the previous transfer to finish, but not forever
+        for (volatile int j = 0; (j < 5000) && ((self->spi_inst->SR & kLPSPI_ModuleBusyFlag) != 0); j++) {}
 
-    lpspi_transfer_t masterXfer;
-    masterXfer.txData = (uint8_t *)src;
-    masterXfer.rxData = (uint8_t *)dest;
-    masterXfer.dataSize = len;
-    masterXfer.configFlags = (self->master_config->whichPcs << LPSPI_MASTER_PCS_SHIFT) | kLPSPI_MasterPcsContinuous | kLPSPI_MasterByteSwap;
+        lpspi_transfer_t masterXfer;
+        masterXfer.txData = (uint8_t *)src;
+        masterXfer.rxData = (uint8_t *)dest;
+        masterXfer.dataSize = len;
+        masterXfer.configFlags = (self->master_config->whichPcs << LPSPI_MASTER_PCS_SHIFT) | kLPSPI_MasterPcsContinuous | kLPSPI_MasterByteSwap;
 
-    if (LPSPI_MasterTransferBlocking(self->spi_inst, &masterXfer) != kStatus_Success) {
-        mp_raise_OSError(EIO);
+        if (LPSPI_MasterTransferBlocking(self->spi_inst, &masterXfer) != kStatus_Success) {
+            mp_raise_OSError(EIO);
+        }
     }
 }
 
