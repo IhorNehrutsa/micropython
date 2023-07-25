@@ -93,6 +93,9 @@ class multitest:
     @staticmethod
     def expect_reboot(resume, delay_ms=0):
         print("WAIT_FOR_REBOOT", resume, delay_ms)
+    @staticmethod
+    def output_metric(data):
+        print("OUTPUT_METRIC", data)
 
 {}
 
@@ -158,6 +161,14 @@ class PyInstanceSubProcess(PyInstance):
 
     def __str__(self):
         return self.argv[0].rsplit("/")[-1]
+
+    def prepare_script_from_file(self, filename, prepend, append):
+        # Make tests run in an isolated environment (i.e. `import io` would
+        # otherwise get the `tests/io` directory).
+        remove_cwd_from_sys_path = b"import sys\nsys.path.remove('')\n\n"
+        return remove_cwd_from_sys_path + super().prepare_script_from_file(
+            filename, prepend, append
+        )
 
     def run_script(self, script):
         output = b""
@@ -312,6 +323,7 @@ def run_test_on_instances(test_file, num_instances, instances):
     skip = False
     injected_globals = ""
     output = [[] for _ in range(num_instances)]
+    output_metrics = []
 
     # If the test calls get_network_ip() then inject HOST_IP so that devices can know
     # the IP address of the host.  Do this lazily to not require a TCP/IP connection
@@ -400,6 +412,8 @@ def run_test_on_instances(test_file, num_instances, instances):
                         for instance2 in instances:
                             if instance2 is not instance:
                                 instance2.write(bytes(out, "ascii") + b"\r\n")
+                    elif out.startswith("OUTPUT_METRIC "):
+                        output_metrics.append(out.split(" ", 1)[1])
                     else:
                         output[idx].append(out)
                 if err is not None:
@@ -421,7 +435,7 @@ def run_test_on_instances(test_file, num_instances, instances):
         output_str += "--- instance{} ---\n".format(idx)
         output_str += "\n".join(lines) + "\n"
 
-    return error, skip, output_str
+    return error, skip, output_str, output_metrics
 
 
 def wait_for_reboot(instance, extra_timeout_ms=0):
@@ -481,7 +495,9 @@ def run_tests(test_files, instances_truth, instances_test):
         sys.stdout.flush()
 
         # Run test on test instances
-        error, skip, output_test = run_test_on_instances(test_file, num_instances, instances_test)
+        error, skip, output_test, output_metrics = run_test_on_instances(
+            test_file, num_instances, instances_test
+        )
 
         if not skip:
             # Check if truth exists in a file, and read it in
@@ -491,7 +507,7 @@ def run_tests(test_files, instances_truth, instances_test):
                     output_truth = f.read()
             else:
                 # Run test on truth instances to get expected output
-                _, _, output_truth = run_test_on_instances(
+                _, _, output_truth, _ = run_test_on_instances(
                     test_file, num_instances, instances_truth
                 )
 
@@ -519,6 +535,11 @@ def run_tests(test_files, instances_truth, instances_test):
                 print(output_truth, end="")
                 print("### DIFF ###")
                 print_diff(output_truth, output_test)
+
+        # Print test output metrics, if there are any.
+        if output_metrics:
+            for metric in output_metrics:
+                print(test_file, ": ", metric, sep="")
 
         if cmd_args.show_output:
             print()
@@ -569,7 +590,7 @@ def main():
     cmd_args = cmd_parser.parse_args()
 
     # clear search path to make sure tests use only builtin modules and those in extmod
-    os.environ["MICROPYPATH"] = os.pathsep.join(("", ".frozen", "../extmod"))
+    os.environ["MICROPYPATH"] = os.pathsep.join((".frozen", "../extmod"))
 
     test_files = prepare_test_file_list(cmd_args.files)
     max_instances = max(t[1] for t in test_files)

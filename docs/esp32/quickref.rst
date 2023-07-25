@@ -57,7 +57,6 @@ The :mod:`esp32` module::
 
     import esp32
 
-    esp32.hall_sensor()     # read the internal hall sensor
     esp32.raw_temperature() # read the internal temperature of the MCU, in Fahrenheit
     esp32.ULP()             # access to the Ultra-Low-Power Co-processor
 
@@ -137,9 +136,6 @@ The keyword arguments for the constructor defining the PHY type and interface ar
   or output. Suitable values are Pin.IN and Pin.OUT.
 - ref_clk=pin-object  # defines the Pin used for ref_clk.
 
-The options ref_clk_mode and ref_clk require at least esp-idf version 4.4. For
-earlier esp-idf versions, these parameters must be defined by kconfig board options.
-
 These are working configurations for LAN interfaces of popular boards::
 
     # Olimex ESP32-GATEWAY: power controlled by Pin(5)
@@ -159,20 +155,16 @@ These are working configurations for LAN interfaces of popular boards::
     lan = network.LAN(mdc=machine.Pin(23), mdio=machine.Pin(18),
                       phy_type=network.PHY_LAN8720, phy_addr=1, power=None)
 
+    # Wireless-Tag's WT32-ETH01 v1.4
+
+    lan = network.LAN(mdc=machine.Pin(23), mdio=machine.Pin(18),
+                      phy_type=network.PHY_LAN8720, phy_addr=1,
+                      power=machine.Pin(16))
+
     # Espressif ESP32-Ethernet-Kit_A_V1.2
 
     lan = network.LAN(id=0, mdc=Pin(23), mdio=Pin(18), power=Pin(5),
                       phy_type=network.PHY_IP101, phy_addr=1)
-
-A suitable definition of the PHY interface in a sdkconfig.board file is::
-
-    CONFIG_ETH_PHY_INTERFACE_RMII=y
-    CONFIG_ETH_RMII_CLK_OUTPUT=y
-    CONFIG_ETH_RMII_CLK_OUT_GPIO=17
-    CONFIG_LWIP_LOCAL_HOSTNAME="ESP32_POE"
-
-The value assigned to CONFIG_ETH_RMII_CLK_OUT_GPIO may vary depending on the
-board's wiring.
 
 Delay and timing
 ----------------
@@ -305,15 +297,15 @@ Use the :ref:`machine.PWM <machine.PWM>` class::
 
     from machine import Pin, PWM
 
-    pwm0 = PWM(Pin(0))         # create PWM object from a pin
-    freq = pwm0.freq()         # get current frequency (default 5kHz)
+    pwm0 = PWM(Pin(0), freq=5000, duty_u16=32768) # create PWM object from a pin
+    freq = pwm0.freq()         # get current frequency
     pwm0.freq(1000)            # set PWM frequency from 1Hz to 40MHz
 
-    duty = pwm0.duty()         # get current duty cycle, range 0-1023 (default 512, 50%)
-    pwm0.duty(256)             # set duty cycle from 0 to 1023 as a ratio duty/1023, (now 25%)
+    duty = pwm0.duty()         # get current duty cycle, range 0-1024 (default 512, 50%)
+    pwm0.duty(256)             # set duty cycle from 0 to 1024 as a ratio duty/1024, (now 25%)
 
-    duty_u16 = pwm0.duty_u16() # get current duty cycle, range 0-65535
-    pwm0.duty_u16(2**16*3//4)  # set duty cycle from 0 to 65535 as a ratio duty_u16/65535, (now 75%)
+    duty_u16 = pwm0.duty_u16() # get current duty cycle, range 0-65536
+    pwm0.duty_u16(2**16*3//4)  # set duty cycle from 0 to 65536 as a ratio duty_u16/65536, (now 75%)
 
     duty_ns = pwm0.duty_ns()   # get current pulse width in ns
     pwm0.duty_ns(250_000)      # set pulse width in nanoseconds from 0 to 1_000_000_000/freq, (now 25%)

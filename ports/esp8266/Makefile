@@ -27,7 +27,7 @@ QSTR_GLOBAL_DEPENDENCIES = $(BOARD_DIR)/mpconfigboard.h
 
 # MicroPython feature configurations
 MICROPY_ROM_TEXT_COMPRESSION ?= 1
-MICROPY_PY_USSL = 1
+MICROPY_PY_SSL = 1
 MICROPY_SSL_AXTLS = 1
 AXTLS_DEFS_EXTRA = -Dabort=abort_ -DRT_MAX_PLAIN_LENGTH=1024 -DRT_EXTRA=4096
 BTREE_DEFS_EXTRA = -DDEFPSIZE=1024 -DMINCACHE=3
@@ -70,6 +70,11 @@ LD_FILES ?= boards/esp8266_2m.ld
 LDFLAGS += -nostdlib -T $(LD_FILES) -Map=$(@:.elf=.map) --cref
 LIBS += -L$(ESP_SDK)/lib -lmain -ljson -llwip_open -lpp -lnet80211 -lwpa -lphy -lnet80211
 
+ifeq ($(MICROPY_ESPNOW),1)
+CFLAGS += -DMICROPY_ESPNOW=1
+LIBS += -lespnow
+endif
+
 LIBGCC_FILE_NAME = $(shell $(CC) $(CFLAGS) -print-libgcc-file-name)
 LIBS += -L$(dir $(LIBGCC_FILE_NAME)) -lgcc
 
@@ -106,13 +111,17 @@ SRC_C = \
 	machine_wdt.c \
 	machine_hspi.c \
 	modesp.c \
-	modutime.c \
 	network_wlan.c \
 	ets_alt_task.c \
 	fatfs_port.c \
 	posix_helpers.c \
 	hspi.c \
 	$(wildcard $(BOARD_DIR)/*.c) \
+
+ifeq ($(MICROPY_ESPNOW),1)
+SRC_C += \
+	modespnow.c
+endif
 
 LIB_SRC_C = $(addprefix lib/,\
 	libm/math.c \
@@ -190,12 +199,6 @@ endif
 $(BUILD)/uart.o: $(CONFVARS_FILE)
 
 FROZEN_EXTRA_DEPS = $(CONFVARS_FILE)
-
-ifneq ($(FROZEN_MANIFEST),)
-CFLAGS += -DMICROPY_MODULE_FROZEN_MPY
-CFLAGS += -DMICROPY_QSTR_EXTRA_POOL=mp_qstr_frozen_const_pool
-CFLAGS += -DMICROPY_MODULE_FROZEN_STR
-endif
 
 .PHONY: deploy
 

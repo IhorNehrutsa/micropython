@@ -160,6 +160,12 @@ NORETURN mp_obj_t machine_bootloader(size_t n_args, const mp_obj_t *args) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(machine_bootloader_obj, 0, 1, machine_bootloader);
 
+STATIC mp_obj_t machine_idle(void) {
+    MICROPY_EVENT_POLL_HOOK;
+    return mp_const_none;
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(machine_idle_obj, machine_idle);
+
 STATIC mp_obj_t machine_lightsleep(void) {
     __WFE();
     return mp_const_none;
@@ -199,14 +205,14 @@ STATIC mp_obj_t machine_disable_irq(void) {
 MP_DEFINE_CONST_FUN_OBJ_0(machine_disable_irq_obj, machine_disable_irq);
 
 STATIC const mp_rom_map_elem_t machine_module_globals_table[] = {
-    { MP_ROM_QSTR(MP_QSTR___name__),           MP_ROM_QSTR(MP_QSTR_umachine) },
+    { MP_ROM_QSTR(MP_QSTR___name__),           MP_ROM_QSTR(MP_QSTR_machine) },
     { MP_ROM_QSTR(MP_QSTR_info),               MP_ROM_PTR(&machine_info_obj) },
     { MP_ROM_QSTR(MP_QSTR_reset),              MP_ROM_PTR(&machine_reset_obj) },
     { MP_ROM_QSTR(MP_QSTR_soft_reset),         MP_ROM_PTR(&machine_soft_reset_obj) },
     { MP_ROM_QSTR(MP_QSTR_bootloader),         MP_ROM_PTR(&machine_bootloader_obj) },
     { MP_ROM_QSTR(MP_QSTR_enable_irq),         MP_ROM_PTR(&machine_enable_irq_obj) },
     { MP_ROM_QSTR(MP_QSTR_disable_irq),        MP_ROM_PTR(&machine_disable_irq_obj) },
-    { MP_ROM_QSTR(MP_QSTR_idle),               MP_ROM_PTR(&machine_lightsleep_obj) },
+    { MP_ROM_QSTR(MP_QSTR_idle),               MP_ROM_PTR(&machine_idle_obj) },
     { MP_ROM_QSTR(MP_QSTR_sleep),              MP_ROM_PTR(&machine_lightsleep_obj) },
     { MP_ROM_QSTR(MP_QSTR_lightsleep),         MP_ROM_PTR(&machine_lightsleep_obj) },
     { MP_ROM_QSTR(MP_QSTR_deepsleep),          MP_ROM_PTR(&machine_deepsleep_obj) },
@@ -260,6 +266,6 @@ const mp_obj_module_t mp_module_machine = {
     .globals = (mp_obj_dict_t*)&machine_module_globals,
 };
 
-MP_REGISTER_MODULE(MP_QSTR_umachine, mp_module_machine);
+MP_REGISTER_EXTENSIBLE_MODULE(MP_QSTR_machine, mp_module_machine);
 
 #endif // MICROPY_PY_MACHINE

@@ -48,12 +48,12 @@ low all of the time.
     PWM(Pin(26), freq=700, duty_u16=53248)  # resolution=16, (duty=81.25%, resolution=0.002%), mode=1, channel=4, timer=2
     PWM(Pin(27), freq=700, duty_u16=57344)  # resolution=16, (duty=87.50%, resolution=0.002%), mode=1, channel=5, timer=2
     PWM(Pin(32), freq=799, duty_u16=61440)  # resolution=16, (duty=93.75%, resolution=0.002%), mode=1, channel=6, timer=3
-    PWM(Pin(33), freq=799, duty_u16=65535)  # resolution=16, (duty=100.00%, resolution=0.002%), mode=1, channel=7, timer=3
+    PWM(Pin(33), freq=799, duty_u16=65536)  # resolution=16, (duty=100.00%, resolution=0.002%), mode=1, channel=7, timer=3
 
 
 * Example of a **smooth frequency change**::
 
-    from utime import sleep
+    from time import sleep
     from machine import Pin, PWM
 
     F_MIN = 100
@@ -109,7 +109,7 @@ low all of the time.
 
 * Example of a **smooth duty change**::
 
-    from utime import sleep
+    from time import sleep
     from machine import Pin, PWM
 
     DUTY_MAX = 2**16 - 1
@@ -153,14 +153,14 @@ low all of the time.
     PWM(Pin(27), freq=998, duty_u16=65024)  # resolution=16, (duty=99.22%, resolution=0.002%), mode=0, channel=0, timer=0
     PWM(Pin(27), freq=998, duty_u16=65280)  # resolution=16, (duty=99.61%, resolution=0.002%), mode=0, channel=0, timer=0
 
-    PWM(Pin(27), freq=998, duty_u16=65535)  # resolution=16, (duty=100.00%, resolution=0.002%), mode=0, channel=0, timer=0
+    PWM(Pin(27), freq=998, duty_u16=65536)  # resolution=16, (duty=100.00%, resolution=0.002%), mode=0, channel=0, timer=0
     PWM(Pin(27), freq=998, duty_u16=65279)  # resolution=16, (duty=99.61%, resolution=0.002%), mode=0, channel=0, timer=0
     PWM(Pin(27), freq=998, duty_u16=65023)  # resolution=16, (duty=99.22%, resolution=0.002%), mode=0, channel=0, timer=0
     PWM(Pin(27), freq=998, duty_u16=64767)  # resolution=16, (duty=98.83%, resolution=0.002%), mode=0, channel=0, timer=0
     PWM(Pin(27), freq=998, duty_u16=64511)  # resolution=16, (duty=98.44%, resolution=0.002%), mode=0, channel=0, timer=0
     ...
     PWM(Pin(27), freq=998, duty_u16=1279)  # resolution=16, (duty=1.95%, resolution=0.002%), mode=0, channel=0, timer=0
-    PWM(Pin(27), freq=998, duty_u16=1023)  # resolution=16, (duty=1.56%, resolution=0.002%), mode=0, channel=0, timer=0
+    PWM(Pin(27), freq=998, duty_u16=1024)  # resolution=16, (duty=1.56%, resolution=0.002%), mode=0, channel=0, timer=0
     PWM(Pin(27), freq=998, duty_u16=767)  # resolution=16, (duty=1.17%, resolution=0.002%), mode=0, channel=0, timer=0
     PWM(Pin(27), freq=998, duty_u16=511)  # resolution=16, (duty=0.78%, resolution=0.002%), mode=0, channel=0, timer=0
     PWM(Pin(27), freq=998, duty_u16=255)  # resolution=16, (duty=0.39%, resolution=0.002%), mode=0, channel=0, timer=0
