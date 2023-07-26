@@ -53,7 +53,8 @@ https://github.com/espressif/esp-idf/tree/master/examples/peripherals/pcnt/rotar
 
 #if MICROPY_PY_MACHINE_PCNT
 
-#include "driver/pcnt.h"
+//#include "driver/pcnt.h"
+#include "driver/pulse_cnt.h"
 #include "soc/pcnt_struct.h"
 #include "esp_err.h"
 
@@ -311,7 +312,7 @@ mp_obj_t machine_PCNT_status(mp_obj_t self_in) {
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(machine_PCNT_status_obj, machine_PCNT_status);
 
 // -----------------------------------------------------------------
-STATIC mp_obj_t machine_PCNT_irq(mp_uint_t n_pos_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+STATIC mp_obj_t machine_PCNT_irq(size_t n_pos_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_handler, ARG_trigger, ARG_value };
     static const mp_arg_t allowed_args[] = {
         { MP_QSTR_handler, MP_ARG_OBJ, {.u_obj = mp_const_none} },
