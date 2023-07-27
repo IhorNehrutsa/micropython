@@ -60,6 +60,15 @@ https://github.com/espressif/esp-idf/tree/master/examples/peripherals/pcnt/rotar
 
 #include "machine_encoder.h"
 
+//#include "hal/ledc_hal.h"
+//#include "driver/ledc.h"
+//#include "hal/gpio_hal.h"
+
+#include "py/mpprint.h"
+
+// #define PWM_DBG(...)
+#define PWM_DBG(...) mp_printf(&mp_plat_print, __VA_ARGS__); mp_printf(&mp_plat_print, "\n");
+
 #define GET_INT mp_obj_get_int_truncated
 // #define GET_INT mp_obj_get_ll_int // need PR: py\obj.c: Get 64-bit integer arg. #80896
 
@@ -455,6 +464,27 @@ STATIC void mp_machine_Counter_init_helper(mp_pcnt_obj_t *self, size_t n_args, c
     r_enc_config.counter_l_lim = -INT16_ROLL;
 
     check_esp_err(pcnt_unit_config(&r_enc_config));
+
+
+#if 0
+    // reconfigure for PWM
+    gpio_set_direction(r_enc_config.pulse_gpio_num, GPIO_MODE_INPUT_OUTPUT);
+/*
+    if (r_enc_config.ctrl_gpio_num != PCNT_PIN_NOT_USED) {
+        gpio_set_direction(r_enc_config.ctrl_gpio_num, GPIO_MODE_INPUT_OUTPUT);
+    }
+*/
+    //gpio_matrix_out(myPin, LEDC_HS_SIG_OUT0_IDX + myLedcChannel, 0, 0);
+    for (int channel = 0; channel < 1; ++channel) {
+        esp_rom_gpio_connect_out_signal(r_enc_config.pulse_gpio_num, LEDC_LS_SIG_OUT0_IDX + channel, false, false);
+        #if SOC_LEDC_SUPPORT_HS_MODE
+        esp_rom_gpio_connect_out_signal(r_enc_config.pulse_gpio_num, LEDC_HS_SIG_OUT0_IDX + channel, false, false);
+        #endif
+    }
+#endif
+    PWM_DBG("pin=%d, ctrl_gpio_num=%d, unit=%d, channel=%d", r_enc_config.pulse_gpio_num, r_enc_config.ctrl_gpio_num, r_enc_config.unit, r_enc_config.channel);
+
+
 
     // make sure channel 1 is not set
     r_enc_config.unit = self->unit;

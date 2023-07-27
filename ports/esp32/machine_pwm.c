@@ -38,9 +38,17 @@
 #include "driver/ledc.h"
 #include "esp_err.h"
 #include "soc/gpio_sig_map.h"
+/*
+#include "hal/gpio_hal.h"
+#include "soc/gpio_periph.h"
+#include "soc/soc_caps.h"
+#include "hal/gpio_ll.h"
+#include "hal/gpio_types.h"
+#include "rom/gpio.h"
+*/
 
-#define PWM_DBG(...)
-//#define PWM_DBG(...) mp_printf(&mp_plat_print, __VA_ARGS__); mp_printf(&mp_plat_print, "\n");
+// #define PWM_DBG(...)
+#define PWM_DBG(...) mp_printf(&mp_plat_print, __VA_ARGS__); mp_printf(&mp_plat_print, "\n");
 
 typedef struct _chan_t {
     // Which channel has which GPIO pin assigned?
@@ -178,16 +186,14 @@ STATIC void pwm_deinit(int mode, int channel) {
             check_esp_err(ledc_stop(mode, channel, 0));
             // Disable ledc signal for the pin
             if (mode == LEDC_LOW_SPEED_MODE) {
-                esp_rom_gpio_connect_out_signal(pin, LEDC_LS_SIG_OUT0_IDX + channel, false, true);
+                esp_rom_gpio_connect_out_signal(pin, LEDC_LS_SIG_OUT0_IDX + channel, false, false);
             } else {
-                #if LEDC_SPEED_MODE_MAX > 1
-                #if CONFIG_IDF_TARGET_ESP32
-                esp_rom_gpio_connect_out_signal(pin, LEDC_HS_SIG_OUT0_IDX + channel, false, true);
-                #else
-                #error Add supported CONFIG_IDF_TARGET_ESP32_xxx
-                #endif
+                #if SOC_LEDC_SUPPORT_HS_MODE
+                esp_rom_gpio_connect_out_signal(pin, LEDC_HS_SIG_OUT0_IDX + channel, false, false);
                 #endif
             }
+            // reconfigure as GPIO
+            //gpio_set_direction(pin, GPIO_MODE_INPUT_OUTPUT);
         }
         unregister_channel(mode, channel);
     }
@@ -223,6 +229,47 @@ STATIC void configure_channel(machine_pwm_obj_t *self) {
         PWM_DBG("cfg.duty=%d, cfg.flags.output_invert=%d", cfg.duty, cfg.flags.output_invert);
     }
     check_esp_err(ledc_channel_config(&cfg));
+
+    // reconfigure PWM output for Counter input
+    gpio_set_direction(self->pin, GPIO_MODE_INPUT_OUTPUT);
+    if (self->mode == LEDC_LOW_SPEED_MODE) {
+        esp_rom_gpio_connect_out_signal(self->pin, LEDC_LS_SIG_OUT0_IDX + self->channel, self->output_invert, false);
+    } else {
+        #if SOC_LEDC_SUPPORT_HS_MODE
+        esp_rom_gpio_connect_out_signal(self->pin, LEDC_HS_SIG_OUT0_IDX + self->channel, self->output_invert, false);
+        PWM_DBG("self->pin=%d, LEDC_HS_SIG_OUT0_IDX + self->channel=%d", self->pin, LEDC_HS_SIG_OUT0_IDX + self->channel);
+        #endif
+    }
+    /*
+    test.py:
+    ```
+    import machine
+    pin = machine.Pin(17)
+    counter = machine.Counter(0, pin)  # must be first !!!
+    pwm = machine.PWM(pin)             # must be second !!!
+
+    print(pwm)
+    print(counter)
+    print("counter.value()=", counter.value())
+    print("counter.value()=", counter.value())
+    print("counter.value()=", counter.value())
+    print("counter.value()=", counter.value())
+    print("counter.value()=", counter.value())
+    print("counter.value()=", counter.value())
+    print("counter.value()=", counter.value())
+    ```
+
+    Output is:
+    PWM(Pin(17), freq=5000, duty_u16=32768)
+    Counter(0, src=Pin(17), direction=Counter.UP, edge=Counter.RISING, filter_ns=0)
+    counter.value()= 92
+    counter.value()= 94
+    counter.value()= 95
+    counter.value()= 95
+    counter.value()= 142
+    counter.value()= 142
+    counter.value()= 143
+    */
 }
 
 STATIC void pwm_is_active(machine_pwm_obj_t *self) {
@@ -633,8 +680,6 @@ STATIC void mp_machine_pwm_init_helper(machine_pwm_obj_t *self,
         configure_channel(self);
     }
     register_channel(self->mode, self->channel, self->pin, self->timer);
-
-    self->active = true;
 }
 
 // This called from PWM() constructor
