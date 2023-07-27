@@ -633,6 +633,8 @@ STATIC void mp_machine_pwm_init_helper(machine_pwm_obj_t *self,
         configure_channel(self);
     }
     register_channel(self->mode, self->channel, self->pin, self->timer);
+
+    self->active = true;
 }
 
 // This called from PWM() constructor
