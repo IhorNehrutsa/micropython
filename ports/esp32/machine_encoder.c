@@ -53,7 +53,7 @@ https://github.com/espressif/esp-idf/tree/master/examples/peripherals/pcnt/rotar
 
 #if MICROPY_PY_MACHINE_PCNT
 
-//#include "driver/pcnt.h"
+#include "driver/pcnt.h"
 #include "driver/pulse_cnt.h"
 #include "soc/pcnt_struct.h"
 #include "esp_err.h"
