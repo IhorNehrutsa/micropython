@@ -474,7 +474,9 @@ STATIC void mp_machine_Counter_init_helper(mp_pcnt_obj_t *self, size_t n_args, c
         PIN_INPUT_ENABLE(GPIO_PIN_MUX_REG[r_enc_config.pulse_gpio_num]);
     }
     */
-    gpio_set_direction(r_enc_config.pulse_gpio_num, GPIO_MODE_INPUT_OUTPUT);
+    //gpio_set_direction(r_enc_config.pulse_gpio_num, GPIO_MODE_INPUT_OUTPUT);
+    gpio_ll_output_enable(&GPIO, r_enc_config.pulse_gpio_num);
+
 /*
     if (r_enc_config.ctrl_gpio_num != PCNT_PIN_NOT_USED) {
         gpio_set_direction(r_enc_config.ctrl_gpio_num, GPIO_MODE_INPUT_OUTPUT);
