@@ -180,6 +180,7 @@ STATIC void pwm_deinit(int mode, int channel) {
             }
         }
 
+        /*
         int pin = chans[mode][channel].pin;
         if (pin >= 0) {
             // Mark it unused, and tell the hardware to stop routing
@@ -195,6 +196,7 @@ STATIC void pwm_deinit(int mode, int channel) {
             // reconfigure as GPIO
             //gpio_set_direction(pin, GPIO_MODE_INPUT_OUTPUT);
         }
+        */
         unregister_channel(mode, channel);
     }
 }
@@ -229,7 +231,7 @@ STATIC void configure_channel(machine_pwm_obj_t *self) {
         PWM_DBG("cfg.duty=%d, cfg.flags.output_invert=%d", cfg.duty, cfg.flags.output_invert);
     }
     check_esp_err(ledc_channel_config(&cfg));
-/*
+
     // reconfigure PWM output for Counter input
     gpio_set_direction(self->pin, GPIO_MODE_INPUT_OUTPUT);
     if (self->mode == LEDC_LOW_SPEED_MODE) {
@@ -240,7 +242,7 @@ STATIC void configure_channel(machine_pwm_obj_t *self) {
         PWM_DBG("self->pin=%d, LEDC_HS_SIG_OUT0_IDX + self->channel=%d", self->pin, LEDC_HS_SIG_OUT0_IDX + self->channel);
         #endif
     }
-*/
+
     /*
     test.py:
     ```

@@ -1,7 +1,9 @@
 #ifndef MICROPY_INCLUDED_MACHINE_ENCODER_H
 #define MICROPY_INCLUDED_MACHINE_ENCODER_H
 
-#define INT16_ROLL 32767
+typedef int32_t counter_t; // int64_t
+
+#define INT16_ROLL ((counter_t)32767)
 
 #define FILTER_MAX 1023
 
@@ -20,12 +22,12 @@ typedef struct _mp_pcnt_obj_t {
     int aPinNumber;
     int bPinNumber;
 
-    volatile int64_t counter;
+    volatile counter_t counter;
 
-    int64_t match1;
-    int64_t match2;
-    int64_t counter_match1;
-    int64_t counter_match2;
+    counter_t match1;
+    counter_t match2;
+    counter_t counter_match1;
+    counter_t counter_match2;
     mp_obj_t handler_match1;
     mp_obj_t handler_match2;
     mp_obj_t handler_zero;

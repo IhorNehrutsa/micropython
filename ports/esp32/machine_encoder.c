@@ -57,17 +57,20 @@ https://github.com/espressif/esp-idf/tree/master/examples/peripherals/pcnt/rotar
 #include "driver/pulse_cnt.h"
 #include "soc/pcnt_struct.h"
 #include "esp_err.h"
+#include "esp_log.h"
 
 #include "machine_encoder.h"
-/**/
+/*
 #include "hal/ledc_hal.h"
 #include "driver/ledc.h"
 #include "hal/gpio_hal.h"
-/**/
+*/
 #include "py/mpprint.h"
 
-// #define PWM_DBG(...)
-#define PWM_DBG(...) mp_printf(&mp_plat_print, __VA_ARGS__); mp_printf(&mp_plat_print, "\n");
+#define PWM_DBG(...)
+//#define PWM_DBG(...) mp_printf(&mp_plat_print, __VA_ARGS__); mp_printf(&mp_plat_print, "\n");
+//const static char *TAG = "Encoder";
+//#define PWM_DBG(...) ESP_LOGE(TAG, __VA_ARGS__)
 
 #define GET_INT mp_obj_get_int_truncated
 // #define GET_INT mp_obj_get_ll_int // need PR: py\obj.c: Get 64-bit integer arg. #80896
@@ -75,15 +78,9 @@ https://github.com/espressif/esp-idf/tree/master/examples/peripherals/pcnt/rotar
 STATIC pcnt_isr_handle_t pcnt_isr_handle = NULL;
 STATIC mp_pcnt_obj_t *pcnts[PCNT_UNIT_MAX] = {};
 
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 1, 0)
 #define EVT_THRES_0 PCNT_EVT_THRES_0
 #define EVT_THRES_1 PCNT_EVT_THRES_1
 #define EVT_ZERO    PCNT_EVT_ZERO
-#else
-#define EVT_THRES_0 (1 << PCNT_EVT_THRES_0)
-#define EVT_THRES_1 (1 << PCNT_EVT_THRES_1)
-#define EVT_ZERO    (1 << PCNT_EVT_ZERO)
-#endif
 
 /* Decode what PCNT's unit originated an interrupt
  * and pass this information together with the event type
@@ -112,6 +109,10 @@ STATIC void IRAM_ATTR pcnt_intr_handler(void *arg) {
                 } else if (PCNT.status_unit[id].L_LIM_LAT) {
                     self->counter -= INT16_ROLL;
                 }
+
+                PWM_DBG("counter=%ld", self->counter);
+                PWM_DBG("counter_match1=%ld, counter_match2=%ld", self->counter_match1, self->counter_match2);
+                PWM_DBG("match1=%ld, match2=%ld", self->match1, self->match2);
 
                 self->status = 0;
                 if (PCNT.status_unit[id].THRES1_LAT) {
@@ -231,9 +232,7 @@ void machine_encoder_deinit_all(void) {
         pcnt_deinit(pcnts[id]);
     }
     if (pcnt_isr_handle != NULL) {
-        #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 2, 0)
         check_esp_err(pcnt_isr_unregister(pcnt_isr_handle));
-        #endif
         pcnt_isr_handle = NULL;
     }
 }
@@ -355,17 +354,22 @@ STATIC mp_obj_t machine_PCNT_irq(size_t n_pos_args, const mp_obj_t *pos_args, mp
             if (args[ARG_value].u_obj != MP_OBJ_NULL) {
                 self->match1 = GET_INT(args[ARG_value].u_obj);
                 self->counter_match1 = self->match1 % INT16_ROLL;
+                PWM_DBG("self->match1=%ld, self->counter_match1=%ld", self->match1, self->counter_match1);
                 check_esp_err(pcnt_set_event_value(self->unit, EVT_THRES_1, (int16_t)self->counter_match1));
                 self->counter_match1 = self->match1 - self->counter_match1;
+                PWM_DBG("self->match1=%ld, self->counter_match1=%ld", self->match1, self->counter_match1);
             }
             self->handler_match1 = handler;
             pcnt_event_enable(self->unit, EVT_THRES_1);
-        } else if (trigger & EVT_THRES_0) {
+        }
+        if (trigger & EVT_THRES_0) {
             if (args[ARG_value].u_obj != MP_OBJ_NULL) {
                 self->match2 = GET_INT(args[ARG_value].u_obj);
                 self->counter_match2 = self->match2 % INT16_ROLL;
+                PWM_DBG("self->match2=%ld, self->counter_match2=%ld", self->match2, self->counter_match2);
                 check_esp_err(pcnt_set_event_value(self->unit, EVT_THRES_0, (int16_t)self->counter_match2));
                 self->counter_match2 = self->match2 - self->counter_match2;
+                PWM_DBG("self->match2=%ld, self->counter_match2=%ld", self->match2, self->counter_match2);
             }
             self->handler_match2 = handler;
             pcnt_event_enable(self->unit, EVT_THRES_0);
@@ -374,10 +378,6 @@ STATIC mp_obj_t machine_PCNT_irq(size_t n_pos_args, const mp_obj_t *pos_args, mp
             self->handler_zero = handler;
             pcnt_event_enable(self->unit, EVT_ZERO);
         }
-        /*
-        check_esp_err(pcnt_counter_clear(self->unit));
-        self->counter = 0;
-        */
     }
     return mp_const_none;
 }
@@ -466,7 +466,7 @@ STATIC void mp_machine_Counter_init_helper(mp_pcnt_obj_t *self, size_t n_args, c
     check_esp_err(pcnt_unit_config(&r_enc_config));
 
 
-#if 1
+#if 0
     // reconfigure for PWM
     esp_rom_gpio_pad_select_gpio(r_enc_config.pulse_gpio_num);
     /*
