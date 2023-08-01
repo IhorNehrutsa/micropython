@@ -1,7 +1,12 @@
 #ifndef MICROPY_INCLUDED_MACHINE_ENCODER_H
 #define MICROPY_INCLUDED_MACHINE_ENCODER_H
 
-typedef int32_t counter_t; // int64_t
+// #define USE_INT64
+#ifdef USE_INT64
+typedef int64_t counter_t;
+#else
+typedef int32_t counter_t;
+#endif
 
 #define INT16_ROLL ((counter_t)32767)
 

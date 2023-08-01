@@ -49,7 +49,7 @@
 
 #include "py/mpprint.h"
 
-#define DEBUG 0
+#define DEBUG 1
 
 TaskHandle_t mp_main_task_handle;
 

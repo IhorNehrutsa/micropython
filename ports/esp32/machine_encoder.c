@@ -57,20 +57,24 @@ https://github.com/espressif/esp-idf/tree/master/examples/peripherals/pcnt/rotar
 #include "driver/pulse_cnt.h"
 #include "soc/pcnt_struct.h"
 #include "esp_err.h"
+
+#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 #include "esp_log.h"
 
 #include "machine_encoder.h"
-/*
+/**/
+#include "rom/gpio.h"
 #include "hal/ledc_hal.h"
 #include "driver/ledc.h"
 #include "hal/gpio_hal.h"
-*/
+/**/
 #include "py/mpprint.h"
 
 #define PWM_DBG(...)
 //#define PWM_DBG(...) mp_printf(&mp_plat_print, __VA_ARGS__); mp_printf(&mp_plat_print, "\n");
 //const static char *TAG = "Encoder";
 //#define PWM_DBG(...) ESP_LOGE(TAG, __VA_ARGS__)
+//#define PWM_DBG(...) ESP_LOGE("Encoder", __VA_ARGS__)
 
 #define GET_INT mp_obj_get_int_truncated
 // #define GET_INT mp_obj_get_ll_int // need PR: py\obj.c: Get 64-bit integer arg. #80896
@@ -101,7 +105,7 @@ STATIC mp_pcnt_obj_t *pcnts[PCNT_UNIT_MAX] = {};
 #endif
 STATIC void IRAM_ATTR pcnt_intr_handler(void *arg) {
     for (int id = 0; id < PCNT_UNIT_MAX; ++id) {
-        if (PCNT.int_st.val & (1 << id)) {
+        if (PCNT.int_st.val & BIT(id)) {
             mp_pcnt_obj_t *self = pcnts[id];
             if (self != NULL) {
                 if (PCNT.status_unit[id].H_LIM_LAT) {
@@ -110,13 +114,13 @@ STATIC void IRAM_ATTR pcnt_intr_handler(void *arg) {
                     self->counter -= INT16_ROLL;
                 }
 
-                PWM_DBG("counter=%ld", self->counter);
-                PWM_DBG("counter_match1=%ld, counter_match2=%ld", self->counter_match1, self->counter_match2);
-                PWM_DBG("match1=%ld, match2=%ld", self->match1, self->match2);
-
                 self->status = 0;
                 if (PCNT.status_unit[id].THRES1_LAT) {
                     if (self->counter == self->counter_match1) {
+                        PWM_DBG("counter=%ld", self->counter);
+                        PWM_DBG("counter_match1=%ld", self->counter_match1);
+                        PWM_DBG("match1=%ld", self->match1);
+
                         self->status |= EVT_THRES_1;
                         mp_sched_schedule(self->handler_match1, MP_OBJ_FROM_PTR(self));
                         mp_hal_wake_main_task_from_isr();
@@ -124,6 +128,10 @@ STATIC void IRAM_ATTR pcnt_intr_handler(void *arg) {
                 }
                 if (PCNT.status_unit[id].THRES0_LAT) {
                     if (self->counter == self->counter_match2) {
+                        PWM_DBG("counter=%ld", self->counter);
+                        PWM_DBG("counter_match2=%ld", self->counter_match2);
+                        PWM_DBG("match2=%ld", self->match2);
+
                         self->status |= EVT_THRES_0;
                         mp_sched_schedule(self->handler_match2, MP_OBJ_FROM_PTR(self));
                         mp_hal_wake_main_task_from_isr();
@@ -137,7 +145,8 @@ STATIC void IRAM_ATTR pcnt_intr_handler(void *arg) {
                     }
                 }
             }
-            PCNT.int_clr.val |= 1 << id; // clear the interrupt
+            // PCNT.int_clr.val |= 1 << id; // clear the interrupt
+            PCNT.int_clr.val |= BIT(id); // clear the interrupt
         }
     }
 }
@@ -212,6 +221,8 @@ STATIC void pcnt_disable_events(mp_pcnt_obj_t *self) {
 STATIC void pcnt_deinit(mp_pcnt_obj_t *self) {
     if (self != NULL) {
         check_esp_err(pcnt_counter_pause(self->unit));
+
+        pcnt_intr_disable(self->unit);
 
         check_esp_err(pcnt_event_disable(self->unit, PCNT_EVT_L_LIM));
         check_esp_err(pcnt_event_disable(self->unit, PCNT_EVT_H_LIM));
@@ -319,6 +330,10 @@ mp_obj_t machine_PCNT_status(mp_obj_t self_in) {
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(machine_PCNT_status_obj, machine_PCNT_status);
 
+static inline counter_t remainder_of_division(counter_t divident, counter_t divider) {
+    return divident - divident / divider * divider;
+}
+
 // -----------------------------------------------------------------
 STATIC mp_obj_t machine_PCNT_irq(size_t n_pos_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_handler, ARG_trigger, ARG_value };
@@ -350,11 +365,24 @@ STATIC mp_obj_t machine_PCNT_irq(size_t n_pos_args, const mp_obj_t *pos_args, mp
             pcnt_event_disable(self->unit, EVT_ZERO);
         }
     } else {
+        //pcnt_intr_disable(self->unit);
+
         if (trigger & EVT_THRES_1) {
             if (args[ARG_value].u_obj != MP_OBJ_NULL) {
                 self->match1 = GET_INT(args[ARG_value].u_obj);
+                #ifdef USE_INT64
+                self->counter_match1 = remainder_of_division(self->match1, INT16_ROLL);
+                #else
                 self->counter_match1 = self->match1 % INT16_ROLL;
+                #endif
                 PWM_DBG("self->match1=%ld, self->counter_match1=%ld", self->match1, self->counter_match1);
+                // pcnt_event_disable(self->unit, EVT_THRES_1);
+/*
+                int16_t count;
+                pcnt_get_counter_value(self->unit, &count);
+                pcnt_counter_clear(self->unit);
+                self->counter += count;
+*/
                 check_esp_err(pcnt_set_event_value(self->unit, EVT_THRES_1, (int16_t)self->counter_match1));
                 self->counter_match1 = self->match1 - self->counter_match1;
                 PWM_DBG("self->match1=%ld, self->counter_match1=%ld", self->match1, self->counter_match1);
@@ -365,10 +393,21 @@ STATIC mp_obj_t machine_PCNT_irq(size_t n_pos_args, const mp_obj_t *pos_args, mp
         if (trigger & EVT_THRES_0) {
             if (args[ARG_value].u_obj != MP_OBJ_NULL) {
                 self->match2 = GET_INT(args[ARG_value].u_obj);
+                #ifdef USE_INT64
+                self->counter_match2 = remainder_of_division(self->match2, INT16_ROLL);
+                #else
                 self->counter_match2 = self->match2 % INT16_ROLL;
+                #endif
                 PWM_DBG("self->match2=%ld, self->counter_match2=%ld", self->match2, self->counter_match2);
+                // pcnt_event_disable(self->unit, EVT_THRES_0);
                 check_esp_err(pcnt_set_event_value(self->unit, EVT_THRES_0, (int16_t)self->counter_match2));
                 self->counter_match2 = self->match2 - self->counter_match2;
+/*
+                int16_t count;
+                pcnt_get_counter_value(self->unit, &count);
+                pcnt_counter_clear(self->unit);
+                self->counter += count;
+*/
                 PWM_DBG("self->match2=%ld, self->counter_match2=%ld", self->match2, self->counter_match2);
             }
             self->handler_match2 = handler;
@@ -378,6 +417,7 @@ STATIC mp_obj_t machine_PCNT_irq(size_t n_pos_args, const mp_obj_t *pos_args, mp
             self->handler_zero = handler;
             pcnt_event_enable(self->unit, EVT_ZERO);
         }
+        //pcnt_intr_enable(self->unit);
     }
     return mp_const_none;
 }
@@ -454,7 +494,7 @@ STATIC void mp_machine_Counter_init_helper(mp_pcnt_obj_t *self, size_t n_args, c
     if (self->bPinNumber == COUNTER_UP) {
         r_enc_config.lctrl_mode = PCNT_MODE_KEEP; // Keep the primary counter mode if low
         r_enc_config.hctrl_mode = PCNT_MODE_REVERSE; // Reverse counting direction if high
-    } else {
+    } else { // if (self->bPinNumber == COUNTER_DOWN) {
         r_enc_config.lctrl_mode = PCNT_MODE_REVERSE; // Reverse counting direction if low
         r_enc_config.hctrl_mode = PCNT_MODE_KEEP; // Keep the primary counter mode if high
     }
@@ -462,39 +502,7 @@ STATIC void mp_machine_Counter_init_helper(mp_pcnt_obj_t *self, size_t n_args, c
     // Set the maximum and minimum limit values to watch
     r_enc_config.counter_h_lim = INT16_ROLL;
     r_enc_config.counter_l_lim = -INT16_ROLL;
-
     check_esp_err(pcnt_unit_config(&r_enc_config));
-
-
-#if 0
-    // reconfigure for PWM
-    esp_rom_gpio_pad_select_gpio(r_enc_config.pulse_gpio_num);
-    /*
-    if (GPIO_PIN_MUX_REG[r_enc_config.pulse_gpio_num]) {
-        PIN_INPUT_ENABLE(GPIO_PIN_MUX_REG[r_enc_config.pulse_gpio_num]);
-    }
-    */
-    //gpio_set_direction(r_enc_config.pulse_gpio_num, GPIO_MODE_INPUT_OUTPUT);
-    gpio_ll_output_enable(&GPIO, r_enc_config.pulse_gpio_num);
-
-/*
-    if (r_enc_config.ctrl_gpio_num != PCNT_PIN_NOT_USED) {
-        gpio_set_direction(r_enc_config.ctrl_gpio_num, GPIO_MODE_INPUT_OUTPUT);
-    }
-*/
-    //for (int channel = 0; channel < 1; ++channel)
-    int channel = 0;
-    {
-        //esp_rom_gpio_connect_out_signal(r_enc_config.pulse_gpio_num, LEDC_LS_SIG_OUT0_IDX + channel, false, false);
-        #if SOC_LEDC_SUPPORT_HS_MODE
-        esp_rom_gpio_connect_out_signal(r_enc_config.pulse_gpio_num, LEDC_HS_SIG_OUT0_IDX + channel, false, false);
-        esp_rom_gpio_connect_in_signal(r_enc_config.pulse_gpio_num, LEDC_HS_SIG_OUT0_IDX + channel, false);
-        #endif
-    }
-    PWM_DBG("pin=%d, ctrl_gpio_num=%d, unit=%d, channel=%d, LEDC_HS_SIG_OUT0_IDX + channel=%d", r_enc_config.pulse_gpio_num, r_enc_config.ctrl_gpio_num, r_enc_config.unit, r_enc_config.channel, LEDC_HS_SIG_OUT0_IDX + channel);
-#endif
-
-
 
     // make sure channel 1 is not set
     r_enc_config.unit = self->unit;
@@ -514,8 +522,56 @@ STATIC void mp_machine_Counter_init_helper(mp_pcnt_obj_t *self, size_t n_args, c
         r_enc_config.lctrl_mode = PCNT_MODE_DISABLE; // disabling channel 1
         r_enc_config.hctrl_mode = PCNT_MODE_DISABLE; // disabling channel 1
     }
-
     check_esp_err(pcnt_unit_config(&r_enc_config));
+
+
+
+#if 0
+    // reconfigure for PWM
+    //esp_rom_gpio_pad_select_gpio(r_enc_config.pulse_gpio_num);
+    /*
+    if (GPIO_PIN_MUX_REG[r_enc_config.pulse_gpio_num]) {
+        PIN_INPUT_ENABLE(GPIO_PIN_MUX_REG[r_enc_config.pulse_gpio_num]);
+    }
+    */
+    gpio_set_direction(r_enc_config.pulse_gpio_num, GPIO_MODE_INPUT_OUTPUT);
+    //gpio_ll_output_enable(&GPIO, r_enc_config.pulse_gpio_num);
+/*
+    // GPIO configuration
+    gpio_config_t gpio_conf = {
+        .intr_type = GPIO_INTR_DISABLE,
+        .mode = GPIO_MODE_INPUT | GPIO_MODE_OUTPUT, // also enable the output path if `io_loop_back` is enabled
+        .pull_down_en = false,
+        .pull_up_en = false,
+    };
+    check_esp_err(gpio_config(&gpio_conf));
+*/
+
+
+    if (GPIO_ID_IS_PIN_REGISTER(r_enc_config.ctrl_gpio_num)) {
+        gpio_set_direction(r_enc_config.ctrl_gpio_num, GPIO_MODE_INPUT_OUTPUT);
+    }
+
+/**/
+    //for (int channel = 0; channel < 1; ++channel)
+    int channel = 0;
+    {
+        //esp_rom_gpio_connect_out_signal(r_enc_config.pulse_gpio_num, LEDC_LS_SIG_OUT0_IDX + channel, false, false);
+        #if SOC_LEDC_SUPPORT_HS_MODE
+        esp_rom_gpio_connect_out_signal(r_enc_config.pulse_gpio_num, LEDC_HS_SIG_OUT0_IDX + channel, false, false);
+        //esp_rom_gpio_connect_in_signal(r_enc_config.pulse_gpio_num, LEDC_HS_SIG_OUT0_IDX + channel, false);
+        #endif
+    }
+/**/
+    PWM_DBG("pin=%d, ctrl_gpio_num=%d, unit=%d, channel=%d, LEDC_HS_SIG_OUT0_IDX + channel=%d", r_enc_config.pulse_gpio_num, r_enc_config.ctrl_gpio_num, r_enc_config.unit, r_enc_config.channel, LEDC_HS_SIG_OUT0_IDX + channel);
+#endif
+#if 0
+    if (direction != MP_OBJ_NULL) {
+        if (GPIO_ID_IS_PIN_REGISTER(r_enc_config.ctrl_gpio_num)) {
+            gpio_set_direction(r_enc_config.ctrl_gpio_num, GPIO_MODE_INPUT_OUTPUT);
+        }
+    }
+#endif
 
     if (args[ARG_filter_ns].u_int != -1) {
         self->filter = ns_to_filter(args[ARG_filter_ns].u_int);
@@ -589,10 +645,14 @@ MP_DEFINE_CONST_FUN_OBJ_KW(machine_Counter_init_obj, 1, machine_Counter_init);
 
 STATIC void common_print_kw(const mp_print_t *print, mp_pcnt_obj_t *self) {
     if (self->handler_match1 != MP_OBJ_NULL) {
-        mp_printf(print, ", match1=%ld", self->match1);
+        int16_t value;
+        pcnt_get_event_value(self->unit, EVT_THRES_1, &value);
+        mp_printf(print, ", match1=%ld, value=%d", self->match1, value);
     }
     if (self->handler_match2 != MP_OBJ_NULL) {
-        mp_printf(print, ", match2=%ld", self->match2);
+        int16_t value;
+        pcnt_get_event_value(self->unit, EVT_THRES_0, &value);
+        mp_printf(print, ", match2=%ld, value=%d", self->match2, value);
     }
     mp_printf(print, ", filter_ns=%d)", filter_to_ns(self->filter));
 }
