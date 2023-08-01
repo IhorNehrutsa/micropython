@@ -47,13 +47,17 @@
 #include "usb_serial_jtag.h"
 #include "uart.h"
 
+#include "py/mpprint.h"
+
+#define DEBUG 0
+
 TaskHandle_t mp_main_task_handle;
 
 STATIC uint8_t stdin_ringbuf_array[260];
 ringbuf_t stdin_ringbuf = {stdin_ringbuf_array, sizeof(stdin_ringbuf_array), 0, 0};
 
 // Check the ESP-IDF error code and raise an OSError if it's not ESP_OK.
-void check_esp_err(esp_err_t code) {
+void check_esp_err_(esp_err_t code, const char* func, const int line, const char *file) {
     if (code != ESP_OK) {
         // map esp-idf error code to posix error code
         uint32_t pcode = -code;
@@ -78,6 +82,9 @@ void check_esp_err(esp_err_t code) {
         o_str->data = (const byte *)esp_err_to_name(code); // esp_err_to_name ret's ptr to const str
         o_str->len = strlen((char *)o_str->data);
         o_str->hash = qstr_compute_hash(o_str->data, o_str->len);
+        #if DEBUG
+        mp_printf(MP_PYTHON_PRINTER, "Exception in function '%s' at line %d in file '%s'", func, line, file);
+        #endif
         // raise
         mp_obj_t args[2] = { MP_OBJ_NEW_SMALL_INT(pcode), MP_OBJ_FROM_PTR(o_str)};
         nlr_raise(mp_obj_exception_make_new(&mp_type_OSError, 2, 0, args));
