@@ -448,12 +448,12 @@ STATIC void mp_machine_Counter_init_helper(mp_pcnt_obj_t *self, size_t n_args, c
         mp_raise_ValueError(MP_ERROR_TEXT(MP_ERROR_TEXT("src")));
     }
 
+    mp_obj_t direction = args[ARG_direction].u_obj;
     if (args[ARG__src].u_obj != MP_OBJ_NULL) {
         self->bPinNumber = pin_or_int(args[ARG__src].u_obj);
         self->x124 = -1;
     } else {
         self->x124 = 0;
-        mp_obj_t direction = args[ARG_direction].u_obj;
         if (direction != MP_OBJ_NULL) {
             if (mp_obj_is_type(direction, &machine_pin_type)) {
                 self->bPinNumber = pin_or_int(direction);
@@ -565,7 +565,7 @@ STATIC void mp_machine_Counter_init_helper(mp_pcnt_obj_t *self, size_t n_args, c
 /**/
     PWM_DBG("pin=%d, ctrl_gpio_num=%d, unit=%d, channel=%d, LEDC_HS_SIG_OUT0_IDX + channel=%d", r_enc_config.pulse_gpio_num, r_enc_config.ctrl_gpio_num, r_enc_config.unit, r_enc_config.channel, LEDC_HS_SIG_OUT0_IDX + channel);
 #endif
-#if 0
+#if 1
     if (direction != MP_OBJ_NULL) {
         if (GPIO_ID_IS_PIN_REGISTER(r_enc_config.ctrl_gpio_num)) {
             gpio_set_direction(r_enc_config.ctrl_gpio_num, GPIO_MODE_INPUT_OUTPUT);
