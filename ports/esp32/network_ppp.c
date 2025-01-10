@@ -145,7 +145,7 @@ static mp_obj_t ppp_active(size_t n_args, const mp_obj_t *args) {
                 return mp_const_true;
             }
 
-            self->pcb = pppapi_pppos_create(&self->pppif, ppp_output_callback, ppp_status_cb, self);
+            self->pcb = pppapi_pppos_create(&self->pppif, (void *)ppp_output_callback, ppp_status_cb, self);
 
             if (self->pcb == NULL) {
                 mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("init failed"));
