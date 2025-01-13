@@ -100,7 +100,7 @@ static mp_obj_t ppp_make_new(mp_obj_t stream) {
 }
 MP_DEFINE_CONST_FUN_OBJ_1(esp_network_ppp_make_new_obj, ppp_make_new);
 
-static u32_t ppp_output_callback(ppp_pcb *pcb, u8_t *data, u32_t len, void *ctx) {
+static u32_t ppp_output_callback(ppp_pcb *pcb, const void *data, u32_t len, void *ctx) {
     ppp_if_obj_t *self = ctx;
 
     mp_obj_t stream = self->stream;
@@ -109,7 +109,7 @@ static u32_t ppp_output_callback(ppp_pcb *pcb, u8_t *data, u32_t len, void *ctx)
     }
 
     int err;
-    return mp_stream_rw(stream, data, len, &err, MP_STREAM_RW_WRITE);
+    return mp_stream_rw(stream, (void *)data, len, &err, MP_STREAM_RW_WRITE);
 }
 
 static void pppos_client_task(void *self_in) {
@@ -145,7 +145,7 @@ static mp_obj_t ppp_active(size_t n_args, const mp_obj_t *args) {
                 return mp_const_true;
             }
 
-            self->pcb = pppapi_pppos_create(&self->pppif, (void *)ppp_output_callback, ppp_status_cb, self);
+            self->pcb = pppapi_pppos_create(&self->pppif, ppp_output_callback, ppp_status_cb, self);
 
             if (self->pcb == NULL) {
                 mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("init failed"));
