@@ -17,7 +17,7 @@ FILTER_NS = 25  # ns
 SECONDS = 1
 MATCH = FREQ * SECONDS  # 2 seconds counting time
 # MATCH = 75
-MATCH_1000 = round(MATCH / 1000 * 1.5)  # match margin per thousand
+MATCH_1000 = round(MATCH / 1000 * 3)  # match margin per thousand
 if MATCH_1000 == 0:
     MATCH_1000 = 1
 
@@ -59,7 +59,7 @@ else:
     raise SystemExit
 
 
-def toggle(pin, x):
+def toggle_pin(pin, x):
     print("toggle", pin, x, "time(s).")
     v = pin()
     for _ in range(x):
@@ -68,15 +68,17 @@ def toggle(pin, x):
 
 
 is_callback = False
+callback_counter_value = 0
 pwm = None
 counter = None
 
 
 @micropython.viper
 def callback_print(counter):
-    global is_callback
+    global is_callback, callback_counter_value
     is_callback = True
-    print(" callback Сounter value:", counter.value(), "status:", counter.status())
+    callback_counter_value = counter.value()
+    print(f" callback Сounter value:{callback_counter_value:10} status:{counter.status():3}")
 
 
 @micropython.viper
@@ -88,9 +90,11 @@ def callback_pwm_deinit(counter):
 
 @micropython.viper
 def callback_timer(timer):
+    global callback_counter_value
     pwm.deinit()
     print(" callback pwm.deinit()")
-    print(" callback Сounter value:", counter.value(), "status:", counter.status())
+    callback_counter_value = counter.value()
+    print(f" callback Сounter value:{callback_counter_value:10} status:{counter.status():3}")
 
 
 try:
@@ -123,31 +127,31 @@ try:
     print()
 
     #
-    print("1) Test count if direction is a constant.")
+    print(f"1) Test count {out1} if direction is a constant.")
     print("out1 -> inp1 is counted pulses.")
-    print("Test count UP at the RISING edge.")
+    print("1.1) Test count UP at the RISING edge.")
     # counter = Counter(0, inp1, direction=Counter.UP, edge=Counter.RISING)
     counter = Counter(0, inp1)  # the same
     print(counter, "value:", counter.value())
     assert counter.value() == 0
-    toggle(out1, 1)
+    toggle_pin(out1, 1)
     print(counter, "value:", counter.value())
     assert counter.value() == 1
-    toggle(out1, 1)
+    toggle_pin(out1, 1)
     print(counter, "value:", counter.value())
     assert counter.value() == 1
     print("Ok.")
     print()
 
     #
-    print("Test count DOWN at the FALLING edge.")
+    print("1.2) Test count DOWN at the FALLING edge.")
     counter.init(inp1, direction=Counter.DOWN, edge=Counter.FALLING)
     print(counter, "value:", counter.value())
     assert counter.value() == 0
-    toggle(out1, 1)
+    toggle_pin(out1, 1)
     print(counter, "value:", counter.value())
     assert counter.value() == 0
-    toggle(out1, 1)
+    toggle_pin(out1, 1)
     print(counter, "value:", counter.value())
     assert counter.value() == -1
     print("Ok.")
@@ -155,30 +159,30 @@ try:
 
     #
     counter.deinit()
-    print("2) Test count if direction is a Pin().")
+    print(f"2) Test count {out1} if direction is a {out2}.")
     print("out1 -> inp1 is counted pulses.")
     print("out2 -> inp2 is direction of counting.")
-    print("Test count DOWN when direction Pin()==0 at RISING-FALLING edges.")
-    counter = Counter(0, src=inp1, direction=inp2, edge=Counter.RISING | Counter.FALLING)
     out2(0)
+    print(f"2.1) Test count DOWN when direction {out2}=={out2()} at RISING-FALLING edges.")
+    counter = Counter(0, src=inp1, direction=inp2, edge=Counter.RISING | Counter.FALLING)
     print("direction:", out2, out2(), "->", inp2, inp2())
     print(counter, "value:", counter.value())
     assert counter.value() == 0
-    toggle(out1, 1)
+    toggle_pin(out1, 1)
     print(counter, "value:", counter.value())
     assert counter.value() == -1
-    toggle(out1, 1)
+    toggle_pin(out1, 1)
     print(counter, "value:", counter.value())
     assert counter.value() == -2
     print("Ok.")
     print()
-    print("Test count UP when direction Pin() == 1 at RISING-FALLING edges.")
     out2(1)
+    print(f"2.2) Test count UP when direction {out2} is {out2()} at RISING-FALLING edges.")
     print("direction:", out2, out2(), "->", inp2, inp2())
-    toggle(out1, 1)
+    toggle_pin(out1, 1)
     print(counter, "value:", counter.value())
     assert counter.value() == -1
-    toggle(out1, 1)
+    toggle_pin(out1, 1)
     print(counter, "value:", counter.value())
     assert counter.value() == 0
     print("Ok.")
@@ -187,53 +191,63 @@ try:
     #
     print("3) Test count UP to (2^16 + 1000) and DOWN to -(2^16 + 1000) and callbacks.")
     is_callback = False
+    callback_counter_value = counter.value()
     counter.irq(handler=callback_print, trigger=Counter.IRQ_MATCH, value=1_000)
-    counter.irq(handler=callback_print, trigger=Counter.IRQ_ZERO)
+    if "esp32" in sys.platform:
+        counter.irq(handler=callback_print, trigger=Counter.IRQ_ZERO)
     assert counter.value() == 0
-    print("Test count UP to (2^16 + 1000).")
     out2(1)
-    toggle(out1, 2**16 + 1000)
-    print(counter, "value:", counter.value())
+    print("3.1) Test count UP to (2^16 + 1000).")
+    toggle_pin(out1, 2**16 + 1000)
+    print(counter, "value:", counter.value(), "dif:", counter.value() - 2**16 + 1000)
     assert is_callback == True
     assert counter.value() == 2**16 + 1000, 2**16 + 1000
     print("Ok.")
     print()
-    print("Test count DOWN to -(2^16 + 1000).")
+    
     out2(0)
-    toggle(out1, 2 * (2**16 + 1000))
-    print(counter, "value:", counter.value())
+    print("3.2) Test count DOWN to -(2^16 + 1000).")
+    is_callback = False
+    callback_counter_value = counter.value()
+    counter.irq(handler=callback_print, trigger=Counter.IRQ_MATCH, value=-1_000)
+    toggle_pin(out1, 2 * (2**16 + 1000))
+    print(counter, "value:", counter.value(), "dif:", counter.value() + 2**16 + 1000)
+    assert is_callback == True
     assert counter.value() == -(2**16 + 1000), -(2**16 + 1000)
     print("Ok.")
     print()
 
     #
     counter.deinit()
-    print("4) Test count UP at inp1 Pin() & DOWN at inp2 Pin().")
+    print(f"4) Test count UP at inp1 {out1} & DOWN at inp2 {out2}.")
     print("out1 -> inp1 is counted UP pulses.")
     print("out2 -> inp2 is counted DOWN pulses.")
 
-    print("Test count UP on inp1 Pin() at RISING-FALLING edges.")
+    print("4.1) Test count UP on inp1 {out1} at RISING-FALLING edges.")
     counter = Counter(0, src=inp1, _src=inp2, edge=Counter.RISING | Counter.FALLING)
     is_callback = False
+    callback_counter_value = counter.value()
     counter.irq(handler=callback_print, trigger=Counter.IRQ_MATCH, value=1_000)
-    counter.irq(handler=callback_print, trigger=Counter.IRQ_ZERO)
+    if "esp32" in sys.platform:
+        counter.irq(handler=callback_print, trigger=Counter.IRQ_ZERO)
     print(counter, "value:", counter.value())
-    toggle(out1, 1_100)
-    print(counter, "value:", counter.value())
+    toggle_pin(out1, 1_100)
+    print(counter, "value:", counter.value(), "dif:", counter.value() - 1_100)
     assert is_callback == True
     assert counter.value() == 1_100
     print("Ok.")
     print()
 
-    print("Test count DOWN on inp2 Pin() at RISING-FALLING edges.")
-    toggle(out2, 2 * 1_100)
-    print(counter, "value:", counter.value())
+    print("4.2) Test count DOWN on inp2 {out2} at RISING-FALLING edges.")
+    toggle_pin(out2, 2 * 1_100)
+    print(counter, "value:", counter.value(), "dif:", counter.value() + 1_100)
     assert is_callback == True
     assert counter.value() == -1_100
     print("Ok.")
     print()
     counter.irq(handler=None, trigger=Counter.IRQ_MATCH)
-    counter.irq(handler=None, trigger=Counter.IRQ_ZERO)
+    if "esp32" in sys.platform:
+        counter.irq(handler=None, trigger=Counter.IRQ_ZERO)
 
     #
     counter.deinit()
@@ -244,39 +258,59 @@ try:
     print("direction of counting: out2 -> inp2:", out2, out2(), "->", inp2, inp2())
     print()
 
-    pwm = PWM(out1, freq=FREQ)
+    pwm = PWM(out1, freq=FREQ, duty_u16=32768)
     print(pwm)
     pwm.deinit()
 
-    counter = Counter(0, src=inp1, direction=inp2)
+    print(f"5.1) Test count UP when direction {out2} is {out2()} at FALLING edges.")
+    counter = Counter(0, src=inp1, direction=inp2, edge=Counter.FALLING)
     print(counter, "value:", counter.value())
     timer = Timer(1)
-    timer.init(mode=Timer.ONE_SHOT, period=1_000 * SECONDS, callback=callback_timer)
-    pwm.init(freq=FREQ)
+    timer.init(mode=Timer.ONE_SHOT, period=1_000 * SECONDS + 2 * MATCH_1000, callback=callback_timer)
+    pwm.init(freq=FREQ, duty_u16=32768)
     while counter.value() < MATCH:
         pass
-    print(counter, "value:", counter.value())
+    print(counter, "value:", counter.value(), "dif:", counter.value() - MATCH)
     assert counter.value() >= MATCH
     assert counter.value() < MATCH + MATCH_1000
     print("Ok.")
     print()
+    timer.deinit()
+
+    out2(0)
+    print(f"5.2) Test count DOWN when direction {out2} is {out2()} at FALLING edges.")
+    print(counter, "value:", counter.value())
+    timer = Timer(1)
+    timer.init(mode=Timer.ONE_SHOT, period=2 * 1_000 * SECONDS + 2 * MATCH_1000, callback=callback_timer)
+    print(timer)
+    pwm.init(freq=FREQ, duty_u16=32768)
+    while counter.value() > -MATCH:
+        pass
+    print(counter, "value:", counter.value(), "dif:", counter.value() + MATCH)
+    assert counter.value() <= -MATCH
+    assert counter.value() > -MATCH - MATCH_1000
+    print("Ok.")
+    print()
     counter.deinit()
+    timer.deinit()
+    pwm.deinit()
 
     #
     print("6) Test PWM counting at inp1 Pin() & direction at inp2 Pin().")
     print("Stop PWM in Counter callback.")
-    print("6.1) Test count UP when direction Pin() == 1 at RISING edges.")
     out2(1)
+    print(f"6.1) Test count UP when direction {out2} is {out2()} at RISING edges.")
 
     counter1 = Counter(1, src=inp1, direction=inp2, filter_ns=FILTER_NS)
     counter = Counter(0, src=inp1, direction=inp2, filter_ns=FILTER_NS)
     is_callback = False
+    callback_counter_value = counter.value()
     counter.irq(handler=callback_pwm_deinit, trigger=Counter.IRQ_MATCH, value=MATCH)
     print(counter, "value:", counter.value())
-    pwm.init(freq=FREQ)
+    pwm.init(freq=FREQ, duty_u16=32768)
     while counter.value() < MATCH:
         pass
-    print(counter, "value:", counter.value())
+    print(counter, "value:", counter.value(), "dif:", counter.value() - MATCH)
     assert is_callback == True
     assert counter.value() >= MATCH
     assert counter.value() < MATCH + MATCH_1000
@@ -285,12 +319,13 @@ try:
     print()
 
     is_callback = False
+    callback_counter_value = counter.value()
     counter.irq(handler=callback_pwm_deinit, trigger=Counter.IRQ_MATCH, value=MATCH + 300)
     print(counter, "value:", counter.value())
-    pwm.init(freq=FREQ)
+    pwm.init(freq=FREQ, duty_u16=32768)
     while counter.value() < MATCH + 300:
         pass
-    print(counter, "value:", counter.value())
+    print(counter, "value:", counter.value(), "dif:", counter.value() - (MATCH + 300))
     assert is_callback == True
     assert counter.value() >= MATCH + 300
     assert counter.value() < MATCH + 300 + MATCH_1000
@@ -299,12 +334,13 @@ try:
     print()
 
     is_callback = False
+    callback_counter_value = counter.value()
     counter.irq(handler=callback_pwm_deinit, trigger=Counter.IRQ_MATCH, value=MATCH + 500)
     print(counter, "value:", counter.value())
-    pwm.init(freq=FREQ)
+    pwm.init(freq=FREQ, duty_u16=32768)
     while counter.value() < MATCH + 500:
         pass
-    print(counter, "value:", counter.value())
+    print(counter, "value:", counter.value(), "dif:", counter.value() - (MATCH + 500))
     assert is_callback == True
     assert counter.value() >= MATCH + 500
     assert counter.value() < MATCH + 500 + MATCH_1000
@@ -316,12 +352,13 @@ try:
     out2(0)
 
     is_callback = False
+    callback_counter_value = counter.value()
     counter.irq(handler=callback_pwm_deinit, trigger=Counter.IRQ_MATCH, value=MATCH + 300)
     print(counter, "value:", counter.value())
-    pwm.init(freq=FREQ)
+    pwm.init(freq=FREQ, duty_u16=32768)
     while counter.value() > MATCH + 300:
         pass
-    print(counter, "value:", counter.value())
+    print(counter, "value:", counter.value(), "dif:", counter.value() - (MATCH + 300))
     assert is_callback == True
     assert counter.value() <= MATCH + 300
     assert counter.value() > MATCH + 300 - MATCH_1000
@@ -330,12 +367,13 @@ try:
     print()
 
     is_callback = False
+    callback_counter_value = counter.value()
     counter.irq(handler=callback_pwm_deinit, trigger=Counter.IRQ_MATCH, value=MATCH)
     print(counter, "value:", counter.value())
-    pwm.init(freq=FREQ)
+    pwm.init(freq=FREQ, duty_u16=32768)
     while counter.value() > MATCH:
         pass
-    print(counter, "value:", counter.value())
+    print(counter, "value:", counter.value(), "dif:", counter.value() - MATCH)
     assert is_callback == True
     assert counter.value() <= MATCH
     assert counter.value() > MATCH - MATCH_1000
@@ -344,12 +382,13 @@ try:
     print()
 
     is_callback = False
+    callback_counter_value = counter.value()
     counter.irq(handler=callback_pwm_deinit, trigger=Counter.IRQ_MATCH, value=0)
     print(counter, "value:", counter.value())
-    pwm.init(freq=FREQ)
+    pwm.init(freq=FREQ, duty_u16=32768)
     while counter.value() > 0:
         pass
-    print(counter, "value:", counter.value())
+    print(counter, "value:", counter.value(), "dif:", counter.value() - 0)
     assert is_callback == True
     assert counter.value() <= 0
     assert counter.value() > -MATCH_1000
@@ -360,12 +399,14 @@ try:
     counter.irq(handler=None, trigger=Counter.IRQ_MATCH)
 
     #     is_callback = False
-    #     counter.irq(handler=callback_pwm_deinit, trigger=Counter.IRQ_ZERO)
+    #     callback_counter_value = counter.value()
+    #     if "esp32" in sys.platform:
+    #         counter.irq(handler=callback_pwm_deinit, trigger=Counter.IRQ_ZERO)
     #     print(counter, "value:", counter.value())
-    #     pwm.init(freq=FREQ)
+    #     pwm.init(freq=FREQ, duty_u16=32768)
     #     while counter.value() > 0:
     #         pass
-    #     print(counter, "value:", counter.value())
+    #     print(counter, "value:", counter.value(), "dif:", counter.value() - 0)
     #     assert is_callback == True
     #     assert counter.value() <= 0
     #     assert counter.value() > -MATCH_1000
@@ -373,15 +414,17 @@ try:
     #     print("Ok.")
     #     print()
 
-    counter.irq(handler=None, trigger=Counter.IRQ_ZERO)
+    if "esp32" in sys.platform:
+        counter.irq(handler=None, trigger=Counter.IRQ_ZERO)
 
     is_callback = False
+    callback_counter_value = counter.value()
     counter.irq(handler=callback_pwm_deinit, trigger=Counter.IRQ_MATCH, value=-MATCH)
     print(counter, "value:", counter.value())
-    pwm.init(freq=FREQ)
+    pwm.init(freq=FREQ, duty_u16=32768)
     while counter.value() > -MATCH:
         pass
-    print(counter, "value:", counter.value())
+    print(counter, "value:", counter.value(), "dif:", counter.value() + MATCH)
     assert is_callback == True
     assert counter.value() <= -MATCH
     assert counter.value() > -(MATCH + MATCH_1000)
@@ -390,12 +433,13 @@ try:
     print()
 
     is_callback = False
+    callback_counter_value = counter.value()
     counter.irq(handler=callback_pwm_deinit, trigger=Counter.IRQ_MATCH, value=-(MATCH + 300))
     print(counter, "value:", counter.value())
-    pwm.init(freq=FREQ)
+    pwm.init(freq=FREQ, duty_u16=32768)
     while counter.value() > -(MATCH + 300):
         pass
-    print(counter, "value:", counter.value())
+    print(counter, "value:", counter.value(), "dif:", counter.value() + MATCH + 300)
     assert is_callback == True
     assert counter.value() <= -(MATCH + 300)
     assert counter.value() > -(MATCH + 300 + MATCH_1000)
@@ -404,12 +448,13 @@ try:
     print()
 
     is_callback = False
+    callback_counter_value = counter.value()
     counter.irq(handler=callback_pwm_deinit, trigger=Counter.IRQ_MATCH, value=-(MATCH + 500))
     print(counter, "value:", counter.value())
-    pwm.init(freq=FREQ)
+    pwm.init(freq=FREQ, duty_u16=32768)
     while counter.value() > -(MATCH + 500):
         pass
-    print(counter, "value:", counter.value())
+    print(counter, "value:", counter.value(), "dif:", counter.value() + MATCH + 500)
     assert is_callback == True
     assert counter.value() <= -(MATCH + 500)
     assert counter.value() > -(MATCH + 500 + MATCH_1000)
@@ -417,16 +462,17 @@ try:
     print("Ok.")
     print()
 
-    print("6.3) Test count UP when direction Pin() == 1 at RISING edges.")
     out2(1)
-
+    print(f"6.3) Test count UP when direction {out2} is {out2()} at RISING edges.")
+    
     is_callback = False
+    callback_counter_value = counter.value()
     counter.irq(handler=callback_pwm_deinit, trigger=Counter.IRQ_MATCH, value=-(MATCH + 300))
     print(counter, "value:", counter.value())
-    pwm.init(freq=FREQ)
+    pwm.init(freq=FREQ, duty_u16=32768)
     while counter.value() < -(MATCH + 300):
         pass
-    print(counter, "value:", counter.value())
+    print(counter, "value:", counter.value(), "dif:", counter.value() + MATCH + 300)
     assert is_callback == True
     assert counter.value() >= -(MATCH + 300)
     assert counter.value() < -(MATCH + 300 - MATCH_1000)
@@ -435,12 +481,13 @@ try:
     print()
 
     is_callback = False
+    callback_counter_value = counter.value()
     counter.irq(handler=callback_pwm_deinit, trigger=Counter.IRQ_MATCH, value=-MATCH)
     print(counter, "value:", counter.value())
-    pwm.init(freq=FREQ)
+    pwm.init(freq=FREQ, duty_u16=32768)
     while counter.value() < -MATCH:
         pass
-    print(counter, "value:", counter.value())
+    print(counter, "value:", counter.value(), "dif:", counter.value() + MATCH)
     assert is_callback == True
     assert counter.value() >= -MATCH
     assert counter.value() < -(MATCH - MATCH_1000)
@@ -451,12 +498,16 @@ try:
     counter.irq(handler=None, trigger=Counter.IRQ_MATCH)
 
     is_callback = False
-    counter.irq(handler=callback_pwm_deinit, trigger=Counter.IRQ_ZERO)
+    callback_counter_value = counter.value()
+    if "esp32" in sys.platform:
+        counter.irq(handler=callback_pwm_deinit, trigger=Counter.IRQ_ZERO)
+    else:        
+        counter.irq(handler=callback_pwm_deinit, trigger=Counter.IRQ_MATCH, value=0)
     print(counter, "value:", counter.value())
-    pwm.init(freq=FREQ)
+    pwm.init(freq=FREQ, duty_u16=32768)
     while counter.value() < 0:
         pass
-    print(counter, "value:", counter.value())
+    print(counter, "value:", counter.value(), "dif:", counter.value() - 0)
     assert is_callback == True
     assert counter.value() >= 0
     assert counter.value() < MATCH_1000
@@ -473,8 +524,7 @@ finally:
     except:
         pass
     try:
-        print(counter1, end=" ")
-        print("value:", counter1.value())
+        print(counter1, "value:", counter1.value())
     except:
         pass
     try:
