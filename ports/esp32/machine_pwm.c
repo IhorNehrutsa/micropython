@@ -250,11 +250,6 @@ static void apply_duty(machine_pwm_obj_t *self) {
             .flags.output_invert = self->output_invert,
         };
         check_esp_err(ledc_channel_config(&cfg));
-        if (self->light_sleep_enable) {
-            // Disable SLP_SEL to change GPIO status automantically in lightsleep.
-            check_esp_err(gpio_sleep_sel_dis(self->pin));
-            chans[self->mode][self->channel].light_sleep_enable = true;
-        }
         reconfigure_pin(self);
     } else {
         #if FADE
@@ -263,6 +258,11 @@ static void apply_duty(machine_pwm_obj_t *self) {
         check_esp_err(ledc_set_duty(self->mode, self->channel, self->channel_duty));
         check_esp_err(ledc_update_duty(self->mode, self->channel));
         #endif
+    }
+    if (self->light_sleep_enable) {
+        // Disable SLP_SEL to change GPIO status automantically in lightsleep.
+        check_esp_err(gpio_sleep_sel_dis(self->pin));
+        chans[self->mode][self->channel].light_sleep_enable = true;
     }
     register_channel(self->mode, self->channel, self->pin, self->timer);
 }
