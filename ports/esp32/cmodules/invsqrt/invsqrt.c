@@ -11,7 +11,7 @@
 
 // function for madgwick.c and for mahony.c
 
-// #define USE_VERSION 3
+#define USE_VERSION 3
 
 float invSqrt(float x) {
     #if USE_VERSION == 1
