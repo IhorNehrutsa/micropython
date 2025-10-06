@@ -25,13 +25,7 @@
  */
 #ifndef MICROPY_INCLUDED_ESP32_MACHINE_CAN_H
 #define MICROPY_INCLUDED_ESP32_MACHINE_CAN_H
-/*
-#include "modmachine.h"
-#include "freertos/task.h"
 
-#include "mpconfigport.h"
-#include "py/obj.h"
-*/
 #if MICROPY_PY_MACHINE_CAN
 
 #define CAN_MODE_SILENT_LOOPBACK (0x10)
