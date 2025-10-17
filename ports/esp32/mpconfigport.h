@@ -62,7 +62,7 @@
 #define MICROPY_STACK_CHECK_MARGIN          (1024)
 #define MICROPY_ENABLE_EMERGENCY_EXCEPTION_BUF (1)
 #define MICROPY_LONGINT_IMPL                (MICROPY_LONGINT_IMPL_MPZ)
-#define MICROPY_ERROR_REPORTING             (MICROPY_ERROR_REPORTING_NORMAL) // Debugging Note: Increase the error reporting level to view
+#define MICROPY_ERROR_REPORTING             (MICROPY_ERROR_REPORTING_NORMAL +1) // Debugging Note: Increase the error reporting level to view
                                                                              // __FUNCTION__, __LINE__, __FILE__ in check_esp_err() exceptions
 #define MICROPY_WARNINGS                    (1)
 #define MICROPY_FLOAT_IMPL                  (MICROPY_FLOAT_IMPL_FLOAT)
@@ -187,6 +187,9 @@
 #endif
 #define MICROPY_HW_SOFTSPI_MIN_DELAY        (0)
 #define MICROPY_HW_SOFTSPI_MAX_BAUDRATE     (esp_rom_get_cpu_ticks_per_us() * 1000000 / 200) // roughly
+#ifndef MICROPY_HW_ESP_NEW_I2C_DRIVER
+#define MICROPY_HW_ESP_NEW_I2C_DRIVER       (0)
+#endif
 #define MICROPY_PY_SSL                      (1)
 #define MICROPY_SSL_MBEDTLS                 (1)
 #define MICROPY_PY_WEBSOCKET                (1)

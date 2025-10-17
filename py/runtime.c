@@ -430,7 +430,7 @@ mp_obj_t MICROPY_WRAP_MP_BINARY_OP(mp_binary_op)(mp_binary_op_t op, mp_obj_t lhs
             // Operations that can overflow:
             //      +       result always fits in mp_int_t, then handled by SMALL_INT check
             //      -       result always fits in mp_int_t, then handled by SMALL_INT check
-            //      *       checked explicitly
+            //      *       checked explicitly for fit in mp_int_t, then handled by SMALL_INT check
             //      /       if lhs=MIN and rhs=-1; result always fits in mp_int_t, then handled by SMALL_INT check
             //      %       if lhs=MIN and rhs=-1; result always fits in mp_int_t, then handled by SMALL_INT check
             //      <<      checked explicitly
@@ -489,31 +489,16 @@ mp_obj_t MICROPY_WRAP_MP_BINARY_OP(mp_binary_op)(mp_binary_op_t op, mp_obj_t lhs
                     break;
                 case MP_BINARY_OP_MULTIPLY:
                 case MP_BINARY_OP_INPLACE_MULTIPLY: {
-
-                    // If long long type exists and is larger than mp_int_t, then
-                    // we can use the following code to perform overflow-checked multiplication.
-                    // Otherwise (eg in x64 case) we must use mp_small_int_mul_overflow.
-                    #if 0
-                    // compute result using long long precision
-                    long long res = (long long)lhs_val * (long long)rhs_val;
-                    if (res > MP_SMALL_INT_MAX || res < MP_SMALL_INT_MIN) {
-                        // result overflowed SMALL_INT, so return higher precision integer
-                        return mp_obj_new_int_from_ll(res);
-                    } else {
-                        // use standard precision
-                        lhs_val = (mp_int_t)res;
-                    }
-                    #endif
-
                     mp_int_t int_res;
-                    if (mp_small_int_mul_overflow(lhs_val, rhs_val, &int_res)) {
+                    if (mp_mul_mp_int_t_overflow(lhs_val, rhs_val, &int_res)) {
                         // use higher precision
                         lhs = mp_obj_new_int_from_ll(lhs_val);
                         goto generic_binary_op;
                     } else {
                         // use standard precision
-                        return MP_OBJ_NEW_SMALL_INT(int_res);
+                        lhs_val = int_res;
                     }
+                    break;
                 }
                 case MP_BINARY_OP_FLOOR_DIVIDE:
                 case MP_BINARY_OP_INPLACE_FLOOR_DIVIDE:
@@ -553,7 +538,7 @@ mp_obj_t MICROPY_WRAP_MP_BINARY_OP(mp_binary_op)(mp_binary_op_t op, mp_obj_t lhs
                         mp_int_t ans = 1;
                         while (rhs_val > 0) {
                             if (rhs_val & 1) {
-                                if (mp_small_int_mul_overflow(ans, lhs_val, &ans)) {
+                                if (mp_mul_mp_int_t_overflow(ans, lhs_val, &ans)) {
                                     goto power_overflow;
                                 }
                             }
@@ -562,7 +547,7 @@ mp_obj_t MICROPY_WRAP_MP_BINARY_OP(mp_binary_op)(mp_binary_op_t op, mp_obj_t lhs
                             }
                             rhs_val /= 2;
                             mp_int_t int_res;
-                            if (mp_small_int_mul_overflow(lhs_val, lhs_val, &int_res)) {
+                            if (mp_mul_mp_int_t_overflow(lhs_val, lhs_val, &int_res)) {
                                 goto power_overflow;
                             }
                             lhs_val = int_res;
@@ -1684,14 +1669,14 @@ mp_obj_t mp_parse_compile_execute(mp_lexer_t *lex, mp_parse_input_kind_t parse_i
 #endif // MICROPY_ENABLE_COMPILER
 
 MP_NORETURN void m_malloc_fail(size_t num_bytes) {
-    DEBUG_printf("memory allocation failed, allocating %u bytes\n", (uint)num_bytes);
+    DEBUG_printf("memory allocation failed, allocating " SIZE_FMT " bytes\n", num_bytes);
     #if MICROPY_ENABLE_GC
     if (gc_is_locked()) {
         mp_raise_msg(&mp_type_MemoryError, MP_ERROR_TEXT("memory allocation failed, heap is locked"));
     }
     #endif
     mp_raise_msg_varg(&mp_type_MemoryError,
-        MP_ERROR_TEXT("memory allocation failed, allocating %u bytes"), (uint)num_bytes);
+        MP_ERROR_TEXT("memory allocation failed, allocating " SIZE_FMT " bytes"), num_bytes);
 }
 
 #if MICROPY_ERROR_REPORTING == MICROPY_ERROR_REPORTING_NONE

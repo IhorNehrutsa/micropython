@@ -27,15 +27,36 @@
 #define MICROPY_INCLUDED_ESP32_MACHINE_CAN_H
 
 #if MICROPY_PY_MACHINE_CAN
+/*
+typedef enum {
+    TWAI_MODE_NORMAL,      //< Normal operating mode where TWAI controller can send/receive/acknowledge messages
+    TWAI_MODE_NO_ACK,      //< Transmission does not require acknowledgment. Use this mode for self testing
+    TWAI_MODE_LISTEN_ONLY, //< The TWAI controller will not influence the bus (No transmissions or acknowledgments) but can receive messages
+} twai_mode_t;
+*/
+/*
+   - ``NORMAL`` - CAN controller interacts normally on the bus.
+   - ``SLEEP`` - CAN controller is asleep in a low power mode. Depending on the
+     controller, this may support waking the controller and transitioning to
+     ``NORMAL`` mode if CAN traffic is received.
+   - ``LOOPBACK`` - A testing mode. The CAN controller is still connected to the
+     external bus, but will also receive its own transmitted messages and ignore
+     any ACK errors.
+   - ``SILENT`` - CAN controller receives messages but does not interact with
+     the CAN bus (including sending ACKs, errors, etc.)
+   - ``SILENT_LOOPBACK`` - A testing mode that does not require a CAN bus. The
+     CAN controller receives its own transmitted messages without interacting
+     with the CAN bus at all. The CAN TX and RX pins remain idle.
+*/
 
 #define CAN_MODE_SILENT_LOOPBACK (0x10)
 
 typedef enum {
     MODE_NORMAL = TWAI_MODE_NORMAL,
     MODE_SLEEP = -1,
-    MODE_LOOPBACK = -2, // TWAI_MODE_NORMAL | CAN_MODE_SILENT_LOOPBACK,
+    MODE_LOOPBACK = TWAI_MODE_NO_ACK, // requires wired TX - RX pin connection
     MODE_SILENT = TWAI_MODE_NO_ACK,
-    MODE_SILENT_LOOPBACK = -3,
+    MODE_SILENT_LOOPBACK = TWAI_MODE_NO_ACK | CAN_MODE_SILENT_LOOPBACK,
     MODE_LISTEN_ONLY = TWAI_MODE_LISTEN_ONLY, // esp32 specific
 } can_mode_t;
 
@@ -70,7 +91,6 @@ typedef enum {
     */
 } error_state_t;
 
-
 typedef enum {
     RTR = 1,
     EXTENDED_ID,
@@ -92,16 +112,13 @@ typedef enum {
 } send_errors_t;
 
 typedef struct {
-    twai_timing_config_t timing;
-    twai_filter_config_t filter;
-    twai_general_config_t general;
-    uint32_t bitrate; // bit/s
-    bool initialized;
-} esp32_can_config_t;
-
-typedef struct {
     mp_obj_base_t base;
-    esp32_can_config_t *config;
+
+    twai_timing_config_t t_config;
+    twai_filter_config_t f_config;
+    twai_general_config_t g_config;
+    uint32_t bitrate; // bit/s
+
     mp_obj_t rx_callback;
     mp_obj_t tx_callback;
     TaskHandle_t irq_handler;

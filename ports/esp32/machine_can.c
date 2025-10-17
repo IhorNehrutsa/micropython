@@ -22,7 +22,6 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-// #include <string.h>
 
 #include "mpconfigport.h"
 #include "py/obj.h"
@@ -36,11 +35,14 @@
 #include "freertos/task.h"
 #include "esp_idf_version.h"
 
+#include "soc/soc_caps.h"
 #include "esp_task.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "driver/twai.h"
 #include "machine_can.h"
+
+#if SOC_TWAI_SUPPORTED
 
 #if MICROPY_PY_MACHINE_CAN
 
@@ -55,43 +57,26 @@
 #define CAN_DEFAULT_BS2 (4)
 #define CAN_MAX_DATA_FRAME          (8)
 
-// #define TWAI_TIMING_CONFIG_20KBITS()    {.clk_src = TWAI_CLK_SRC_DEFAULT, .quanta_resolution_hz = 400000, .brp = 0, .tseg_1 = 15, .tseg_2 = 4, .sjw = 3, .triple_sampling = false}
-
-// static const twai_timing_config_t t_config = TWAI_TIMING_CONFIG_500KBITS();
-static const twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
-
-// singleton CAN device object
-esp32_can_config_t can_config = {
-    .general = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_2, GPIO_NUM_4, TWAI_MODE_NORMAL),
-    .filter = TWAI_FILTER_CONFIG_ACCEPT_ALL(),
-    .timing = TWAI_TIMING_CONFIG_500KBITS(),
-    .initialized = false
-};
-
-static esp32_can_obj_t esp32_can_obj = {
-    {&machine_can_type},
-    .config = &can_config,
-    .handle = NULL,
-};
+//static twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
 
 // INTERNAL Deinitialize can
-void can_deinit(const esp32_can_obj_t *self) {
-    if (self->handle) {
-        check_esp_err(twai_stop_v2(self->handle));
-        check_esp_err(twai_driver_uninstall_v2(self->handle));
-    }
+void can_deinit(esp32_can_obj_t *self) {
+    check_esp_err(twai_stop_v2(self->handle));
+    check_esp_err(twai_driver_uninstall_v2(self->handle));
     if (self->irq_handler != NULL) {
         vTaskDelete(self->irq_handler);
     }
-    self->config->initialized = false;
+    self->irq_handler = NULL;
+    self->handle = NULL;
 }
 
 static void esp32_can_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
     esp32_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
 
-    if (self->config->initialized) {
+    mp_printf(print, "CAN(");
+    if (self->handle) {
         qstr mode;
-        switch (self->config->general.mode) {
+        switch (self->g_config.mode) {
             case TWAI_MODE_LISTEN_ONLY:
                 mode = MP_QSTR_LISTEN;
                 break;
@@ -105,16 +90,16 @@ static void esp32_can_print(const mp_print_t *print, mp_obj_t self_in, mp_print_
                 mode = MP_QSTR_UNKNOWN;
                 break;
         }
-        mp_printf(print, "CAN(tx=%u, rx=%u, bitrate=%u, mode=%q, loopback=%u, extframe=%u)",
-            self->config->general.tx_io,
-            self->config->general.rx_io,
-            self->config->bitrate,
+        mp_printf(print, "%d, tx=%u, rx=%u, bitrate=%u, mode=%q, loopback=%u, extframe=%u",
+            self->g_config.controller_id,
+            self->g_config.tx_io,
+            self->g_config.rx_io,
+            self->bitrate,
             mode,
             self->loopback,
             self->extframe);
-    } else {
-        mp_printf(print, "Device is not initialized");
     }
+    mp_printf(print, ")");
 }
 
 // INTERNAL FUNCTION FreeRTOS IRQ task
@@ -132,7 +117,6 @@ static void esp32_can_irq_task(void *self_in) {
 
     while (1) {
         check_esp_err(twai_read_alerts_v2(self->handle, &alerts, portMAX_DELAY));
-
 
         if (alerts & TWAI_ALERT_BUS_OFF) {
             for (int i = 3; i > 0; i--) {
@@ -154,7 +138,7 @@ static void esp32_can_irq_task(void *self_in) {
         }
 
         if (alerts & (TWAI_ALERT_TX_FAILED | TWAI_ALERT_TX_SUCCESS)) {
-            self->last_tx_success = (alerts & TWAI_ALERT_TX_SUCCESS) > 0;
+            self->last_tx_success = alerts & TWAI_ALERT_TX_SUCCESS;
         }
 
         if (self->tx_callback != mp_const_none) {
@@ -181,7 +165,7 @@ static void esp32_can_irq_task(void *self_in) {
                 if (msgs_to_rx == 1) {
                     // first message in queue
                     mp_sched_schedule(self->rx_callback, MP_OBJ_NEW_SMALL_INT(0));
-                } else if (msgs_to_rx >= self->config->general.rx_queue_len) {
+                } else if (msgs_to_rx >= self->g_config.rx_queue_len) {
                     // queue is full
                     mp_sched_schedule(self->rx_callback, MP_OBJ_NEW_SMALL_INT(1));
                 }
@@ -213,43 +197,46 @@ static mp_obj_t esp32_can_init_helper(esp32_can_obj_t *self, size_t n_args, cons
         { MP_QSTR_rx, MP_ARG_INT, {.u_int = 5} },
         { MP_QSTR_clkout, MP_ARG_INT, {.u_int = TWAI_IO_UNUSED} },
         { MP_QSTR_bus_off, MP_ARG_INT, {.u_int = TWAI_IO_UNUSED} },
-        { MP_QSTR_tx_queue, MP_ARG_INT, {.u_int = 1} },
-        { MP_QSTR_rx_queue, MP_ARG_INT, {.u_int = 1} },
+        { MP_QSTR_tx_queue, MP_ARG_INT, {.u_int = 5} },
+        { MP_QSTR_rx_queue, MP_ARG_INT, {.u_int = 5} },
     };
+
+    printf("esp32_can_init_helper() \n");
 
     // parse args
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
-
-    // Configure device
-    self->config->general.mode = args[ARG_mode].u_int & 0x0F;
-    self->config->general.tx_io = args[ARG_tx_io].u_int;
-    self->config->general.rx_io = args[ARG_rx_io].u_int;
-    self->config->general.clkout_io = args[ARG_clkout_io].u_int;
-    self->config->general.bus_off_io = args[ARG_bus_off_io].u_int;
-    self->config->general.tx_queue_len = args[ARG_tx_queue].u_int;
-    self->config->general.rx_queue_len = args[ARG_rx_queue].u_int;
-    self->config->general.alerts_enabled = TWAI_ALERT_ALL;
-    // TWAI_ALERT_AND_LOG || TWAI_ALERT_BELOW_ERR_WARN || TWAI_ALERT_ERR_ACTIVE || TWAI_ALERT_BUS_RECOVERED ||
-    // TWAI_ALERT_ABOVE_ERR_WARN || TWAI_ALERT_BUS_ERROR || TWAI_ALERT_ERR_PASS || TWAI_ALERT_BUS_OFF;
-    self->config->general.clkout_divider = 0;
-    self->loopback = ((args[ARG_mode].u_int & CAN_MODE_SILENT_LOOPBACK) > 0);
-    self->extframe = args[ARG_extframe].u_bool;
-    if (args[ARG_auto_restart].u_bool) {
-        mp_raise_NotImplementedError(MP_ERROR_TEXT("Auto-restart not supported"));
-    }
-    self->config->filter = f_config; // TWAI_FILTER_CONFIG_ACCEPT_ALL(); //
 
     // clear errors
     self->num_error_warning = 0;
     self->num_error_passive = 0;
     self->num_bus_off = 0;
 
+    // Configure device
+    self->g_config.mode = args[ARG_mode].u_int & 0x0F;
+    self->g_config.tx_io = args[ARG_tx_io].u_int;
+    self->g_config.rx_io = args[ARG_rx_io].u_int;
+    self->g_config.clkout_io = args[ARG_clkout_io].u_int;
+    self->g_config.bus_off_io = args[ARG_bus_off_io].u_int;
+    self->g_config.tx_queue_len = args[ARG_tx_queue].u_int;
+    self->g_config.rx_queue_len = args[ARG_rx_queue].u_int;
+    self->g_config.alerts_enabled = TWAI_ALERT_ALL;
+    // TWAI_ALERT_AND_LOG || TWAI_ALERT_BELOW_ERR_WARN || TWAI_ALERT_ERR_ACTIVE || TWAI_ALERT_BUS_RECOVERED ||
+    // TWAI_ALERT_ABOVE_ERR_WARN || TWAI_ALERT_BUS_ERROR || TWAI_ALERT_ERR_PASS || TWAI_ALERT_BUS_OFF;
+    self->g_config.clkout_divider = 0;
+    self->loopback = ((args[ARG_mode].u_int & TWAI_MODE_NO_ACK) > 0);
+    self->extframe = args[ARG_extframe].u_bool;
+    if (args[ARG_auto_restart].u_bool) {
+        mp_raise_NotImplementedError(MP_ERROR_TEXT("Auto-restart not supported"));
+    }
+
+    self->f_config = (twai_filter_config_t)TWAI_FILTER_CONFIG_ACCEPT_ALL();
+
     // Calculate CAN nominal bit timing from bitrate if provided
-    self->config->bitrate = args[ARG_bitrate].u_int;
-    switch (self->config->bitrate) {
+    self->bitrate = args[ARG_bitrate].u_int;
+    switch (self->bitrate) {
         case 0:
-            self->config->timing = (twai_timing_config_t) {
+            self->t_config = (twai_timing_config_t) {
                 .brp = args[ARG_prescaler].u_int,
                 .sjw = args[ARG_sjw].u_int,
                 .tseg_1 = args[ARG_bs1].u_int,
@@ -259,86 +246,86 @@ static mp_obj_t esp32_can_init_helper(esp32_can_obj_t *self, size_t n_args, cons
             break;
         #ifdef TWAI_TIMING_CONFIG_1KBITS
         case 1000:
-            self->config->timing = (twai_timing_config_t)TWAI_TIMING_CONFIG_1KBITS();
+            self->t_config = (twai_timing_config_t)TWAI_TIMING_CONFIG_1KBITS();
             break;
         #endif
         #ifdef TWAI_TIMING_CONFIG_5KBITS
         case 5000:
-            self->config->timing = (twai_timing_config_t)TWAI_TIMING_CONFIG_5KBITS();
+            self->t_config = (twai_timing_config_t)TWAI_TIMING_CONFIG_5KBITS();
             break;
         #endif
         #ifdef TWAI_TIMING_CONFIG_10KBITS
         case 10000:
-            self->config->timing = (twai_timing_config_t)TWAI_TIMING_CONFIG_10KBITS();
+            self->t_config = (twai_timing_config_t)TWAI_TIMING_CONFIG_10KBITS();
             break;
         #endif
         #ifdef TWAI_TIMING_CONFIG_12_5KBITS
         case 12500:
-            self->config->timing = (twai_timing_config_t)TWAI_TIMING_CONFIG_12_5KBITS();
+            self->t_config = (twai_timing_config_t)TWAI_TIMING_CONFIG_12_5KBITS();
             break;
         #endif
         #ifdef TWAI_TIMING_CONFIG_16KBITS
         case 16000:
-            self->config->timing = (twai_timing_config_t)TWAI_TIMING_CONFIG_16KBITS();
+            self->t_config = (twai_timing_config_t)TWAI_TIMING_CONFIG_16KBITS();
             break;
         #endif
         #ifdef TWAI_TIMING_CONFIG_20KBITS
         case 20000:
-            self->config->timing = (twai_timing_config_t)TWAI_TIMING_CONFIG_20KBITS();
+            self->t_config = (twai_timing_config_t)TWAI_TIMING_CONFIG_20KBITS();
             break;
         #endif
         #ifdef TWAI_TIMING_CONFIG_25KBITS
         case 25000:
-            self->config->timing = (twai_timing_config_t)TWAI_TIMING_CONFIG_25KBITS();
+            self->t_config = (twai_timing_config_t)TWAI_TIMING_CONFIG_25KBITS();
             break;
         #endif
         #ifdef TWAI_TIMING_CONFIG_50KBITS
         case 50000:
-            self->config->timing = (twai_timing_config_t)TWAI_TIMING_CONFIG_50KBITS();
+            self->t_config = (twai_timing_config_t)TWAI_TIMING_CONFIG_50KBITS();
             break;
         #endif
         #ifdef TWAI_TIMING_CONFIG_100KBITS
         case 100000:
-            self->config->timing = (twai_timing_config_t)TWAI_TIMING_CONFIG_100KBITS();
+            self->t_config = (twai_timing_config_t)TWAI_TIMING_CONFIG_100KBITS();
             break;
         #endif
         #ifdef TWAI_TIMING_CONFIG_125KBITS
         case 125000:
-            self->config->timing = (twai_timing_config_t)TWAI_TIMING_CONFIG_125KBITS();
+            self->t_config = (twai_timing_config_t)TWAI_TIMING_CONFIG_125KBITS();
             break;
         #endif
         #ifdef TWAI_TIMING_CONFIG_250KBITS
         case 250000:
-            self->config->timing = (twai_timing_config_t)TWAI_TIMING_CONFIG_250KBITS();
+            self->t_config = (twai_timing_config_t)TWAI_TIMING_CONFIG_250KBITS();
             break;
         #endif
         #ifdef TWAI_TIMING_CONFIG_500KBITS
         case 500000:
-            self->config->timing = (twai_timing_config_t)TWAI_TIMING_CONFIG_500KBITS();
+            self->t_config = (twai_timing_config_t)TWAI_TIMING_CONFIG_500KBITS();
             break;
         #endif
         #ifdef TWAI_TIMING_CONFIG_800KBITS
         case 800000:
-            self->config->timing = (twai_timing_config_t)TWAI_TIMING_CONFIG_800KBITS();
+            self->t_config = (twai_timing_config_t)TWAI_TIMING_CONFIG_800KBITS();
             break;
         #endif
         #ifdef TWAI_TIMING_CONFIG_1MBITS
         case 1000000:
-            self->config->timing = (twai_timing_config_t)TWAI_TIMING_CONFIG_1MBITS();
+            self->t_config = (twai_timing_config_t)TWAI_TIMING_CONFIG_1MBITS();
             break;
         #endif
         default:
-            self->config->bitrate = 0;
+            self->bitrate = 0;
             mp_raise_ValueError(MP_ERROR_TEXT("Unable to set bitrate"));
             return mp_const_none;
     }
 
-    check_esp_err(twai_driver_install_v2(&self->config->general, &self->config->timing, &self->config->filter, &self->handle));
+    check_esp_err(twai_driver_install_v2(&self->g_config, &self->t_config, &self->f_config, &self->handle));
     check_esp_err(twai_start_v2(self->handle));
     if (xTaskCreatePinnedToCore(esp32_can_irq_task, "can_irq_task", CAN_TASK_STACK_SIZE, self, CAN_TASK_PRIORITY, (TaskHandle_t *)&self->irq_handler, MP_TASK_COREID) != pdPASS) {
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("failed to create can irq task handler"));
     }
-    self->config->initialized = true;
+    printf("2: esp32_can_init_helper() \n");
     return mp_const_none;
 }
 
@@ -354,17 +341,19 @@ static mp_obj_t esp32_can_make_new(const mp_obj_type_t *type, size_t n_args, siz
     // work out port
     mp_uint_t can_idx = mp_obj_get_int(args[0]);
     if (can_idx > SOC_TWAI_CONTROLLER_NUM - 1) {
-        mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("out of CAN controllers:%d"), SOC_TWAI_CONTROLLER_NUM);
+//        mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("out of CAN controllers:%d"), SOC_TWAI_CONTROLLER_NUM);
     }
 
-    esp32_can_obj_t *self = &esp32_can_obj;
+//    esp32_can_obj_t *self = &esp32_can_obj;
+    esp32_can_obj_t *self = mp_obj_malloc(esp32_can_obj_t, &machine_can_type);
+
+    self->g_config = (twai_general_config_t)TWAI_GENERAL_CONFIG_DEFAULT_V2(can_idx, GPIO_NUM_22, GPIO_NUM_23, TWAI_MODE_NORMAL);
+    self->f_config = (twai_filter_config_t)TWAI_FILTER_CONFIG_ACCEPT_ALL();
+    self->t_config = (twai_timing_config_t)TWAI_TIMING_CONFIG_500KBITS();
+    self->handle = NULL;
+
     self->status.state = STOPPED;
-    if (!self->config->initialized || n_args > 1 || n_kw > 0) {
-        if (self->config->initialized) {
-            // The caller is requesting a reconfiguration of the hardware
-            // this can only be done if the hardware is in init mode
-            can_deinit(self);
-        }
+    if (n_args > 1 || n_kw > 0) {
         self->tx_callback = mp_const_none;
         self->rx_callback = mp_const_none;
         self->irq_handler = NULL;
@@ -383,8 +372,8 @@ static mp_obj_t esp32_can_make_new(const mp_obj_type_t *type, size_t n_args, siz
 // init(tx, rx, bitrate, mode=NORMAL, tx_queue=2, rx_queue=5)
 static mp_obj_t esp32_can_init(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     esp32_can_obj_t *self = MP_OBJ_TO_PTR(pos_args[0]);
-    if (self->config->initialized) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Device is already initialized"));
+    if (self->handle) {
+        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Driver is already initialized"));
         return mp_const_none;
     }
     return esp32_can_init_helper(self, n_args - 1, pos_args + 1, kw_args);
@@ -393,11 +382,7 @@ static MP_DEFINE_CONST_FUN_OBJ_KW(esp32_can_init_obj, 4, esp32_can_init);
 
 // deinit()
 static mp_obj_t esp32_can_deinit(const mp_obj_t self_in) {
-    const esp32_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    if (self->config->initialized != true) {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Device is not initialized"));
-        return mp_const_none;
-    }
+    esp32_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
     can_deinit(self);
     return mp_const_none;
 }
@@ -408,11 +393,6 @@ static MP_DEFINE_CONST_FUN_OBJ_1(esp32_can_deinit_obj, esp32_can_deinit);
 static mp_obj_t esp32_can_restart(mp_obj_t self_in) {
     esp32_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
     check_esp_err(twai_get_status_info_v2(self->handle, &self->status));
-
-    if (!self->config->initialized || self->status.state != TWAI_STATE_BUS_OFF) {
-        return mp_const_none;
-        // mp_raise_ValueError(NULL);
-    }
 
     self->bus_recovery_success = -1;
     check_esp_err(twai_initiate_recovery_v2(self->handle));
@@ -434,9 +414,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(esp32_can_restart_obj, esp32_can_restart);
 // Get the state of the controller
 static mp_obj_t esp32_can_state(mp_obj_t self_in) {
     esp32_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
-    if (self->config->initialized) {
-        check_esp_err(twai_get_status_info_v2(self->handle, &self->status));
-    }
+    check_esp_err(twai_get_status_info_v2(self->handle, &self->status));
     return mp_obj_new_int(self->status.state);
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(esp32_can_state_obj, esp32_can_state);
@@ -456,6 +434,7 @@ static mp_obj_t esp32_can_info(size_t n_args, const mp_obj_t *args) {
     dict_store(rx_error_counter);
     dict_store(tx_failed_count);
     dict_store(rx_missed_count);
+    dict_store(rx_overrun_count);
     dict_store(arb_lost_count);
     dict_store(bus_error_count);
     return dict;
@@ -497,7 +476,7 @@ static mp_obj_t esp32_can_send(size_t n_args, const mp_obj_t *pos_args, mp_map_t
     mp_arg_parse_all(n_args - 1, pos_args + 1, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
     // populate message
-    twai_message_t tx_msg;
+    twai_message_t tx_msg = {0};
 
     size_t length;
     mp_obj_t *items;
@@ -506,16 +485,16 @@ static mp_obj_t esp32_can_send(size_t n_args, const mp_obj_t *pos_args, mp_map_t
         mp_raise_ValueError(MP_ERROR_TEXT("CAN data field too long"));
     }
     tx_msg.data_length_code = length;
-    tx_msg.flags = (args[ARG_rtr].u_bool ? TWAI_MSG_FLAG_RTR : TWAI_MSG_FLAG_NONE);
+    tx_msg.rtr = (args[ARG_rtr].u_bool ? 1 : 0);
 
     if (args[ARG_extframe].u_bool) {
         tx_msg.identifier = args[ARG_id].u_int & 0x1FFFFFFF;
-        tx_msg.flags += TWAI_MSG_FLAG_EXTD;
+        tx_msg.extd = 1;
     } else {
         tx_msg.identifier = args[ARG_id].u_int & 0x7FF;
     }
     if (self->loopback) {
-        tx_msg.flags += TWAI_MSG_FLAG_SELF;
+        tx_msg.self = 1;
     }
 
     for (uint8_t i = 0; i < length; i++) {
@@ -523,16 +502,17 @@ static mp_obj_t esp32_can_send(size_t n_args, const mp_obj_t *pos_args, mp_map_t
     }
 
     check_esp_err(twai_get_status_info_v2(self->handle, &self->status));
+    debug_printf("state:%d", self->status.state);
     if (self->status.state == TWAI_STATE_RUNNING) {
         uint32_t timeout_ms = args[ARG_timeout].u_int;
 
         if (timeout_ms != 0) {
-            self->last_tx_success = -1;
-            uint32_t start = mp_hal_ticks_us();
+            self->last_tx_success = 0;
+            uint32_t start = mp_hal_ticks_ms();
             check_esp_err(twai_transmit_v2(self->handle, &tx_msg, pdMS_TO_TICKS(timeout_ms)));
-            while (self->last_tx_success < 0) {
+            while (!self->last_tx_success) {
                 if (timeout_ms != portMAX_DELAY) {
-                    if (mp_hal_ticks_us() - start >= timeout_ms) {
+                    if (mp_hal_ticks_ms() - start >= timeout_ms) {
                         mp_raise_OSError(MP_ETIMEDOUT);
                     }
                 }
@@ -548,7 +528,7 @@ static mp_obj_t esp32_can_send(size_t n_args, const mp_obj_t *pos_args, mp_map_t
 
         return mp_const_none;
     } else {
-        mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Device is not ready"));
+        mp_raise_msg_varg(&mp_type_RuntimeError, MP_ERROR_TEXT("Driver is not in running state:%d"), self->status.state);
     }
 }
 static MP_DEFINE_CONST_FUN_OBJ_KW(esp32_can_send_obj, 3, esp32_can_send);
@@ -615,15 +595,15 @@ static mp_obj_t esp32_can_clearfilter(mp_obj_t self_in) {
     esp32_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
 
     // Defaults from TWAI_FILTER_CONFIG_ACCEPT_ALL
-    self->config->filter = f_config; // TWAI_FILTER_CONFIG_ACCEPT_ALL(); //
+    self->f_config = (twai_filter_config_t)TWAI_FILTER_CONFIG_ACCEPT_ALL();;
 
     // Apply filter
     check_esp_err(twai_stop_v2(self->handle));
     check_esp_err(twai_driver_uninstall_v2(self->handle));
     check_esp_err(twai_driver_install_v2(
-        &self->config->general,
-        &self->config->timing,
-        &self->config->filter, &self->handle));
+        &self->g_config,
+        &self->t_config,
+        &self->f_config, &self->handle));
     check_esp_err(twai_start_v2(self->handle));
     return mp_const_none;
 }
@@ -666,15 +646,15 @@ static mp_obj_t esp32_can_set_filters(size_t n_args, const mp_obj_t *pos_args, m
         if (len != 2) {
             mp_raise_ValueError(MP_ERROR_TEXT("params must be a 2-values list"));
         }
-        self->config->filter.single_filter = (mode == FILTER_RAW_SINGLE);
-        self->config->filter.acceptance_code = id;
-        self->config->filter.acceptance_mask = mask;
+        self->f_config.single_filter = (mode == FILTER_RAW_SINGLE);
+        self->f_config.acceptance_code = id;
+        self->f_config.acceptance_mask = mask;
     } else {
-        self->config->filter.single_filter = self->extframe;
+        self->f_config.single_filter = self->extframe;
         // esp32_can_set_filters(self, id, mask, args[ARG_bank].u_int, args[ARG_rtr].u_int);
         // Check if bank is allowed
         int bank = 0;
-        if (bank > ((self->extframe && self->config->filter.single_filter) ? 0 : 1)) {
+        if (bank > ((self->extframe && self->f_config.single_filter) ? 0 : 1)) {
             mp_raise_ValueError(MP_ERROR_TEXT("CAN filter parameter error"));
         }
         uint32_t preserve_mask;
@@ -684,7 +664,7 @@ static mp_obj_t esp32_can_set_filters(size_t n_args, const mp_obj_t *pos_args, m
             addr = (addr & 0x1FFFFFFF) << 3 | (rtr ? 0x04 : 0);
             mask = (mask & 0x1FFFFFFF) << 3 | 0x03;
             preserve_mask = 0;
-        } else if (self->config->filter.single_filter) {
+        } else if (self->f_config.single_filter) {
             addr = (((addr & 0x7FF) << 5) | (rtr ? 0x10 : 0));
             mask = ((mask & 0x7FF) << 5);
             mask |= 0xFFFFF000;
@@ -693,7 +673,7 @@ static mp_obj_t esp32_can_set_filters(size_t n_args, const mp_obj_t *pos_args, m
             addr = (((addr & 0x7FF) << 5) | (rtr ? 0x10 : 0));
             mask = ((mask & 0x7FF) << 5);
             preserve_mask = 0xFFFF << (bank == 0 ? 16 : 0);
-            if ((self->config->filter.acceptance_mask & preserve_mask) == (0xFFFF << (bank == 0 ? 16 : 0))) {
+            if ((self->f_config.acceptance_mask & preserve_mask) == (0xFFFF << (bank == 0 ? 16 : 0))) {
                 // Other filter accepts all; it will replaced duplicating current filter
                 addr = addr | (addr << 16);
                 mask = mask | (mask << 16);
@@ -703,10 +683,10 @@ static mp_obj_t esp32_can_set_filters(size_t n_args, const mp_obj_t *pos_args, m
                 mask = mask << (bank == 1 ? 16 : 0);
             }
         }
-        self->config->filter.acceptance_code &= preserve_mask;
-        self->config->filter.acceptance_code |= addr;
-        self->config->filter.acceptance_mask &= preserve_mask;
-        self->config->filter.acceptance_mask |= mask;
+        self->f_config.acceptance_code &= preserve_mask;
+        self->f_config.acceptance_code |= addr;
+        self->f_config.acceptance_mask &= preserve_mask;
+        self->f_config.acceptance_mask |= mask;
     }
     // Apply filter
     if (self->handle) {
@@ -714,9 +694,9 @@ static mp_obj_t esp32_can_set_filters(size_t n_args, const mp_obj_t *pos_args, m
         check_esp_err(twai_driver_uninstall_v2(self->handle));
     }
     check_esp_err(twai_driver_install_v2(
-        &self->config->general,
-        &self->config->timing,
-        &self->config->filter,
+        &self->g_config,
+        &self->t_config,
+        &self->f_config,
         &self->handle
         ));
     check_esp_err(twai_start_v2(self->handle));
@@ -870,9 +850,9 @@ TWAI_MODE_LISTEN_ONLY - The TWAI controller will not influence the bus (No trans
     { MP_ROM_QSTR(MP_QSTR_FILTER_RAW_DUAL), MP_ROM_INT(FILTER_RAW_DUAL) },
     { MP_ROM_QSTR(MP_QSTR_FILTER_ADDRESS), MP_ROM_INT(FILTER_ADDRESS) },
     // CAN_ALERT
-    { MP_ROM_QSTR(MP_QSTR_ALERT_ALL), MP_ROM_INT(TWAI_ALERT_ALL) },
     { MP_ROM_QSTR(MP_QSTR_ALERT_TX_IDLE), MP_ROM_INT(TWAI_ALERT_TX_IDLE) },
     { MP_ROM_QSTR(MP_QSTR_ALERT_TX_SUCCESS), MP_ROM_INT(TWAI_ALERT_TX_SUCCESS) },
+    { MP_ROM_QSTR(MP_QSTR_ALERT_RX_DATA), MP_ROM_INT(TWAI_ALERT_RX_DATA) },
     { MP_ROM_QSTR(MP_QSTR_ALERT_BELOW_ERR_WARN), MP_ROM_INT(TWAI_ALERT_BELOW_ERR_WARN) },
     { MP_ROM_QSTR(MP_QSTR_ALERT_ERR_ACTIVE), MP_ROM_INT(TWAI_ALERT_ERR_ACTIVE) },
     { MP_ROM_QSTR(MP_QSTR_ALERT_RECOVERY_IN_PROGRESS), MP_ROM_INT(TWAI_ALERT_RECOVERY_IN_PROGRESS) },
@@ -883,7 +863,12 @@ TWAI_MODE_LISTEN_ONLY - The TWAI controller will not influence the bus (No trans
     { MP_ROM_QSTR(MP_QSTR_ALERT_TX_FAILED), MP_ROM_INT(TWAI_ALERT_TX_FAILED) },
     { MP_ROM_QSTR(MP_QSTR_ALERT_RX_QUEUE_FULL), MP_ROM_INT(TWAI_ALERT_RX_QUEUE_FULL) },
     { MP_ROM_QSTR(MP_QSTR_ALERT_ERR_PASS), MP_ROM_INT(TWAI_ALERT_ERR_PASS) },
-    { MP_ROM_QSTR(MP_QSTR_ALERT_BUS_OFF), MP_ROM_INT(TWAI_ALERT_BUS_OFF) }
+    { MP_ROM_QSTR(MP_QSTR_ALERT_BUS_OFF), MP_ROM_INT(TWAI_ALERT_BUS_OFF) },
+    { MP_ROM_QSTR(MP_QSTR_ALERT_RX_FIFO_OVERRUN), MP_ROM_INT(TWAI_ALERT_RX_FIFO_OVERRUN) },
+    { MP_ROM_QSTR(MP_QSTR_ALERT_TX_RETRIED), MP_ROM_INT(TWAI_ALERT_TX_RETRIED) },
+    { MP_ROM_QSTR(MP_QSTR_ALERT_PERIPH_RESET), MP_ROM_INT(TWAI_ALERT_PERIPH_RESET) },
+    { MP_ROM_QSTR(MP_QSTR_ALERT_ALL), MP_ROM_INT(TWAI_ALERT_ALL) },
+    { MP_ROM_QSTR(MP_QSTR_ALERT_NONE), MP_ROM_INT(TWAI_ALERT_NONE) }
 };
 static MP_DEFINE_CONST_DICT(esp32_can_locals_dict, esp32_can_locals_dict_table);
 
@@ -898,3 +883,5 @@ MP_DEFINE_CONST_OBJ_TYPE(
     );
 
 #endif // MICROPY_PY_MACHINE_CAN
+
+#endif // SOC_TWAI_SUPPORTED

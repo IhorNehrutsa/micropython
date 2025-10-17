@@ -17,7 +17,7 @@ def send_and_check(can_bus, name, id, expected_result=True, extended=False):
 
 # 4 and 5 pins must be connected to each other, see documentation
 dev = CAN(
-    0, extframe=False, tx=5, rx=4, mode=CAN.SILENT_LOOPBACK, baudrate=50000, auto_restart=False
+    0, extframe=False, tx=22, rx=23, mode=CAN.SILENT_LOOPBACK, bitrate=50000, auto_restart=False 
 )
 
 # Test send/receive message
@@ -26,13 +26,13 @@ send_and_check(dev, "No filter", 0x100, True)
 
 # Set filter1
 print("Loopback Test: one filter - STD")
-dev.setfilter(0, CAN.FILTER_ADDRESS, [0x101, 0])
+#dev.set_filters(0, CAN.FILTER_ADDRESS, [0x101, 0])
 send_and_check(dev, "Passing Message", 0x101, True)
 send_and_check(dev, "Blocked Message", 0x100, False)
 
 # Set filter2
 print("Loopback Test: second filter - STD")
-dev.setfilter(0, CAN.FILTER_ADDRESS, [0x102, 0])
+dev.set_filters(0, CAN.FILTER_ADDRESS, [0x102, 0])
 send_and_check(dev, "Passing Message - Bank 1", 0x102, True)
 send_and_check(dev, "Passing Message - Bank 0", 0x101, True)
 send_and_check(dev, "Blocked Message", 0x100, False)
