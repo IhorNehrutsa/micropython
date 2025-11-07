@@ -78,6 +78,7 @@ def power_info():
 def power_test():
     while True:
         print(power_info())
+        check_PoE()
         sleep_ms(1000)
 
 if __name__ == "__main__":
