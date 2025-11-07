@@ -2,7 +2,7 @@ from stepper import Stepper
 from steps_per_rev import StepsPerRev
 
 class StepperAngle(Stepper, StepsPerRev):
-    def __init__(self, name, pin_step, pin_dir, freq=5_000, reverse_direction=0, max_limit=180, min_limit=-180, steps_per_rev=1):
+    def __init__(self, name, pin_step, pin_dir, freq=5_000, reverse_direction=0, max_limit=None, min_limit=None, steps_per_rev=1):
         super().__init__(name, pin_step, pin_dir, freq, reverse_direction)
 
         self.steps_per_rev = steps_per_rev  # перезапись для StepsPerRev
