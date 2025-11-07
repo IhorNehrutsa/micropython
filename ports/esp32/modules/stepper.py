@@ -139,7 +139,6 @@ class Stepper():
 #         # 7.64kHz
 #
 #     def run_steps(self, steps):  # 7.45kHz
-#         print(f"Run {steps} steps")
 #         self.direction = steps
 #         steps = abs(steps)
 #         while (steps > 0):
@@ -149,7 +148,6 @@ class Stepper():
     ### #@micropython.native # 8.03kHz - мешает прервать по Ctrl-C
     def run_steps(self, steps:int):  # 8.03kHz
         steps = round(steps)
-        print(f"{self.name}.run_steps({steps})")
         self.direction = steps
         self._steps_now += steps
         steps = abs(steps) * 2
@@ -169,7 +167,6 @@ class Stepper():
     def go(self, steps_target = None):
         if steps_target is not None:
             self.steps_target = steps_target
-        print(f'{self.name}.go({self.steps_target})')
         self.run_steps(self._steps_target - self._steps_now)
 
     #@micropython.native
