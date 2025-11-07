@@ -294,7 +294,7 @@ class AS5x47():
     def readRegister(self, registerAddress):
         self.command_frame.ADDR = registerAddress
         self.command_frame.R_W = READ
-        self.command_frame.PARC = is_even(int.from_bytes(self._command_buff, 'big'), __MSB_mask)
+        self.command_frame.PARC = is_even(int.from_bytes(self._command_buff, byteorder="big"), __MSB_mask)
 
         self.readData(self.command_frame)
 
@@ -306,11 +306,11 @@ class AS5x47():
     def writeRegister(self, registerAddress, registerValue):
         self.command_frame.ADDR = registerAddress
         self.command_frame.R_W = WRITE
-        self.command_frame.PARC = is_even(int.from_bytes(self._command_buff, 'big'), __MSB_mask)
+        self.command_frame.PARC = is_even(int.from_bytes(self._command_buff, byteorder="big"), __MSB_mask)
 
         self.data_frame.DATA = registerValue
         self.data_frame.LOW = 0
-        self.data_frame.PARD = is_even(int.from_bytes(self._data_buff, 'big'), __MSB_mask)
+        self.data_frame.PARD = is_even(int.from_bytes(self._data_buff, byteorder="big"), __MSB_mask)
 
         self.writeData(self.command_frame, self.data_frame)
 
