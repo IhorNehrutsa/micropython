@@ -49,8 +49,8 @@ PWR_CTRL = const(33)  # (GPIO33)
 LED = const(2)  #     # (GPIO02)
 # ----------------------------------------------------------------------
 # Button
-BUT1 = const(36)
-BUT2 = const(39)
+BUT1 = const(36)  # Right # XP9 # In the corner of the board
+BUT2 = const(39)  # Left # XP10 
 # ----------------------------------------------------------------------
 # DAC
 #DAC1 = const(25)  # (GPIO25)
@@ -75,7 +75,7 @@ BUT2 = const(39)
 STEP_1 = const(26)  # XP14 Azim
 DIR_1 = const(23)
 
-STEP_2 = const(27)  # XP15 Elev
+STEP_2 = const(27)  # XP15 Elev # On the edge of the board
 DIR_2 = const(32)
 # ----------------------------------------------------------------------
 #  Input only pins
