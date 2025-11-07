@@ -170,6 +170,8 @@ def WiFi_connect(prn=False):
         if wlan_sta.status() != network.STAT_GOT_IP:
             net_state = NET_STA_CONNECTING
             PRINT and print('NET_STA_CONNECTING: not STAT_GOT_IP')
+        else:
+            net_time = time()
     elif net_state == NET_AP_INIT:
         if wlan_sta.active():
             if wlan_sta.isconnected():
