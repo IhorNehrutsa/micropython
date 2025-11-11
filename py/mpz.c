@@ -31,6 +31,10 @@
 
 #if MICROPY_LONGINT_IMPL == MICROPY_LONGINT_IMPL_MPZ
 
+#include "py/objint.h"
+#include "py/runtime.h"
+#define debug_printf(...) // mp_printf(&mp_plat_print, __VA_ARGS__); mp_printf(&mp_plat_print, " | %d at %s\n", __LINE__, __FILE__);
+
 #define DIG_SIZE (MPZ_DIG_SIZE)
 #define DIG_MASK ((MPZ_LONG_1 << DIG_SIZE) - 1)
 #define DIG_MSB  (MPZ_LONG_1 << (DIG_SIZE - 1))
@@ -851,19 +855,58 @@ size_t mpz_set_from_str(mpz_t *z, const char *str, size_t len, bool neg, unsigne
 }
 
 void mpz_set_from_bytes(mpz_t *z, bool big_endian, bool is_signed, size_t len, const byte *buf) {
-    int delta = 1;
+    debug_printf("MPZ");
+    debug_printf("big_endian:%d, is_signed:%d, len:%d", big_endian, is_signed, len)
+    debug_printf("buf %X %X %X %X %X %X", buf[0], buf[1], buf[2], buf[3], buf[4], buf[5])
+    union {
+        long long value;
+        byte buf[sizeof(long long)];
+    } result = {0};
+    if (len > sizeof(result)) {
+        mp_raise_msg(&mp_type_OverflowError, MP_ERROR_TEXT("big-int overflow"));
+    }
     if (big_endian) {
-        buf += len - 1;
-        delta = -1;
+        debug_printf("big_endian");
+        reverce_memcpy(&result, buf, len);
+    } else { // little-endian
+        debug_printf("little-endian");
+        memcpy(&result, buf, len);
     }
 
+    if ((is_signed) && (sizeof(result) > len) && (result.buf[len - 1] & 0x80)) {
+        debug_printf("DDD");
+        // Sign propagation in little-endian
+        // x = 2
+        // x.to_bytes(1, 'little', True) -> b'\x02'
+        // x.to_bytes(4, 'little', True) -> b'\x02\x00\x00\x00'
+        // x = -2
+        // x.to_bytes(1, 'little', True) -> b'\xFE'
+        // x.to_bytes(4, 'little', True) -> b'\xFE\xFF\xFF\xFF'
+        memset(result.buf + len, 0xFF, sizeof(result) - len);
+    }
+    debug_printf("val: %ld, 0x%X", result.value, result.value);
+    mpz_set_from_ll(z, result.value, is_signed);
+    return;
+    /*
+    debug_printf("MPZ");
+    debug_printf("big_endian:%d, is_signed:%d, len:%d", big_endian, is_signed, len)
+    debug_printf("buf %X %X %X %X %X %X  %X %X", buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[len - 1] & 0x80, buf[0] & 0x80)
     mpz_need_dig(z, (len * 8 + DIG_SIZE - 1) / DIG_SIZE);
 
     mpz_dig_t d = 0;
     int num_bits = 0;
     z->neg = 0;
-    if ((is_signed) && (buf[len - 1] & 0x80)) {
-        z->neg = 1;
+    if (is_signed) {
+        debug_printf("is_signed");
+        if (((!big_endian) && (buf[len - 1] & 0x80)) || ((big_endian) && (buf[0] & 0x80))) {
+            z->neg = 1;
+            debug_printf("NEG");
+        }
+    }
+    int delta = 1;
+    if (big_endian) {
+        buf += len - 1;
+        delta = -1;
     }
     z->len = 0;
     while (len) {
@@ -891,6 +934,7 @@ void mpz_set_from_bytes(mpz_t *z, bool big_endian, bool is_signed, size_t len, c
         z->dig[z->len++] = d & DIG_MASK;
     }
     z->len = mpn_remove_trailing_zeros(z->dig, z->dig + z->len);
+    */
 }
 
 #if 0

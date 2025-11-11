@@ -25,6 +25,8 @@ if(MICROPY_BOARD_VARIANT)
     endif()
 endif()
 
+# set(MICROPY_MPY_TOOL_FLAGS -mlongint_impl longlong)
+
 # Define the output sdkconfig so it goes in the build directory.
 set(SDKCONFIG ${CMAKE_BINARY_DIR}/sdkconfig)
 

@@ -59,15 +59,26 @@
 
 //static twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
 
+static esp32_can_obj_t *esp32_can_objs[SOC_TWAI_CONTROLLER_NUM] = {};
+
 // INTERNAL Deinitialize can
 void can_deinit(esp32_can_obj_t *self) {
-    check_esp_err(twai_stop_v2(self->handle));
-    check_esp_err(twai_driver_uninstall_v2(self->handle));
-    if (self->irq_handler != NULL) {
-        vTaskDelete(self->irq_handler);
+    if (self->handle) {
+        check_esp_err(twai_stop_v2(self->handle));
+        check_esp_err(twai_driver_uninstall_v2(self->handle));
+        self->handle = NULL;
     }
-    self->irq_handler = NULL;
-    self->handle = NULL;
+    if (self->irq_handler) {
+        vTaskDelete(self->irq_handler);
+        self->irq_handler = NULL;
+    }
+}
+
+// This called from Ctrl-D soft reboot
+void machine_can_deinit_all() {
+    for (int i = 0; i < SOC_TWAI_CONTROLLER_NUM; i++) {
+        can_deinit(esp32_can_objs[i]);
+    }
 }
 
 static void esp32_can_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
@@ -201,8 +212,6 @@ static mp_obj_t esp32_can_init_helper(esp32_can_obj_t *self, size_t n_args, cons
         { MP_QSTR_rx_queue, MP_ARG_INT, {.u_int = 5} },
     };
 
-    printf("esp32_can_init_helper() \n");
-
     // parse args
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all(n_args, pos_args, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
@@ -325,7 +334,6 @@ static mp_obj_t esp32_can_init_helper(esp32_can_obj_t *self, size_t n_args, cons
     if (xTaskCreatePinnedToCore(esp32_can_irq_task, "can_irq_task", CAN_TASK_STACK_SIZE, self, CAN_TASK_PRIORITY, (TaskHandle_t *)&self->irq_handler, MP_TASK_COREID) != pdPASS) {
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("failed to create can irq task handler"));
     }
-    printf("2: esp32_can_init_helper() \n");
     return mp_const_none;
 }
 
@@ -344,8 +352,9 @@ static mp_obj_t esp32_can_make_new(const mp_obj_type_t *type, size_t n_args, siz
 //        mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("out of CAN controllers:%d"), SOC_TWAI_CONTROLLER_NUM);
     }
 
-//    esp32_can_obj_t *self = &esp32_can_obj;
     esp32_can_obj_t *self = mp_obj_malloc(esp32_can_obj_t, &machine_can_type);
+    esp32_can_objs[can_idx] = self;
+    //esp32_can_obj_t *self = &esp32_can_objs[can_idx];
 
     self->g_config = (twai_general_config_t)TWAI_GENERAL_CONFIG_DEFAULT_V2(can_idx, GPIO_NUM_22, GPIO_NUM_23, TWAI_MODE_NORMAL);
     self->f_config = (twai_filter_config_t)TWAI_FILTER_CONFIG_ACCEPT_ALL();
@@ -502,7 +511,7 @@ static mp_obj_t esp32_can_send(size_t n_args, const mp_obj_t *pos_args, mp_map_t
     }
 
     check_esp_err(twai_get_status_info_v2(self->handle, &self->status));
-    debug_printf("state:%d", self->status.state);
+    //debug_printf("state:%d", self->status.state);
     if (self->status.state == TWAI_STATE_RUNNING) {
         uint32_t timeout_ms = args[ARG_timeout].u_int;
 
