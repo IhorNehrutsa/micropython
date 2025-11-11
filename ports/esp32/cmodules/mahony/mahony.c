@@ -59,14 +59,14 @@ static volatile mp_float_t integralFBx = 0.0f,  integralFBy = 0.0f, integralFBz 
 
 // ---------------------------------------------------------------------------------------------------
 // Function declarations
-STATIC mp_obj_t mahony_MahonyAHRSupdateIMU(size_t n_args, const mp_obj_t *args);
+static mp_obj_t mahony_MahonyAHRSupdateIMU(size_t n_args, const mp_obj_t *args);
 
 // ---------------------------------------------------------------------------------------------------
 // Attitude and heading reference system (AHRS) algorithm update
 //
 // def MahonyAHRSupdate(gx : float, gy : float, gz : float, ax : float, ay : float, az : float, mx : float, my : float, mz : float, delta_t_us:int) -> None:
 //
-STATIC mp_obj_t mahony_MahonyAHRSupdate(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t mahony_MahonyAHRSupdate(size_t n_args, const mp_obj_t *args) {
     mp_float_t gx = mp_obj_get_float(args[0]);
     mp_float_t gy = mp_obj_get_float(args[1]);
     mp_float_t gz = mp_obj_get_float(args[2]);
@@ -195,7 +195,7 @@ MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mahony_MahonyAHRSupdate_obj, 10, 10, mahony_
 //
 // def MahonyAHRSupdateIMU(gx : float, gy : float, gz : float, ax : float, ay : float, az : float, delta_t_us:int) -> None:
 //
-STATIC mp_obj_t mahony_MahonyAHRSupdateIMU(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t mahony_MahonyAHRSupdateIMU(size_t n_args, const mp_obj_t *args) {
     mp_float_t gx = mp_obj_get_float(args[0]);
     mp_float_t gy = mp_obj_get_float(args[1]);
     mp_float_t gz = mp_obj_get_float(args[2]);
@@ -285,11 +285,11 @@ MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(mahony_MahonyAHRSupdateIMU_obj, 7, 7, mahony
 // https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
 #define ROLL mp_float_t roll = atan2(q0 * q1 + q2 * q3, 0.5f - q1 * q1 - q2 * q2) * 57.295779513f; // degrees
 #define PITCH mp_float_t pitch = asin(2.0f * (q0 * q2 - q3 * q1)) * 57.295779513f; // degrees
-#define YAW mp_float_t yaw = atan2(q0 * q3 + q1 * q2, 0.5f - q2 * q2 - q3 * q3) * 57.295779513f;  // degrees
+#define YAW mp_float_t yaw = atan2(q0 * q3 + q1 * q2, 0.5f - q2 * q2 - q3 * q3) * 57.295779513f; // degrees
 //
 // def angles()
 //
-STATIC mp_obj_t mahony_angles() {
+static mp_obj_t mahony_angles() {
     // roll(X), pitch(Y), yaw(Z)
     ROLL;
     PITCH;
@@ -305,25 +305,25 @@ STATIC mp_obj_t mahony_angles() {
 }
 MP_DEFINE_CONST_FUN_OBJ_0(mahony_angles_obj, mahony_angles);
 
-STATIC mp_obj_t mahony_roll() {
+static mp_obj_t mahony_roll() {
     ROLL;
     return mp_obj_new_float(roll);
 }
 MP_DEFINE_CONST_FUN_OBJ_0(mahony_roll_obj, mahony_roll);
 
-STATIC mp_obj_t mahony_pitch() {
+static mp_obj_t mahony_pitch() {
     PITCH;
     return mp_obj_new_float(pitch);
 }
 MP_DEFINE_CONST_FUN_OBJ_0(mahony_pitch_obj, mahony_pitch);
 
-STATIC mp_obj_t mahony_yaw() {
+static mp_obj_t mahony_yaw() {
     YAW;
     return mp_obj_new_float(yaw);
 }
 MP_DEFINE_CONST_FUN_OBJ_0(mahony_yaw_obj, mahony_yaw);
 
-STATIC mp_obj_t quaternion_to_angles(size_t n_args, const mp_obj_t *args) {
+static mp_obj_t quaternion_to_angles(size_t n_args, const mp_obj_t *args) {
     mp_arg_check_num(n_args, 0, 2, 2, false);
     mp_float_t q0 = mp_obj_get_float(args[0]);
     mp_float_t q1 = mp_obj_get_float(args[1]);
@@ -343,9 +343,9 @@ STATIC mp_obj_t quaternion_to_angles(size_t n_args, const mp_obj_t *args) {
     };
     return mp_obj_new_tuple(3, ret_val);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(quaternion_to_angles_obj, 4, 4, quaternion_to_angles);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(quaternion_to_angles_obj, 4, 4, quaternion_to_angles);
 
-STATIC mp_obj_t angles_to_quaternion(mp_obj_t _roll, mp_obj_t _pitch, mp_obj_t _yaw) {
+static mp_obj_t angles_to_quaternion(mp_obj_t _roll, mp_obj_t _pitch, mp_obj_t _yaw) {
     // roll(X), pitch(Y), yaw(Z)
     mp_float_t roll = mp_obj_get_float(_roll) / 57.295779513f;
     mp_float_t pitch = mp_obj_get_float(_pitch) / 57.295779513f;
@@ -373,13 +373,13 @@ STATIC mp_obj_t angles_to_quaternion(mp_obj_t _roll, mp_obj_t _pitch, mp_obj_t _
     };
     return mp_obj_new_tuple(4, ret_val);
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_3(angles_to_quaternion_obj, angles_to_quaternion);
+static MP_DEFINE_CONST_FUN_OBJ_3(angles_to_quaternion_obj, angles_to_quaternion);
 
 // ---------------------------------------------------------------------------------------------------
 //
 // def get_twoKp() -> float:
 //
-STATIC mp_obj_t mahony_get_twoKp() {
+static mp_obj_t mahony_get_twoKp() {
     mp_float_t ret_val;
 
     ret_val = twoKp;
@@ -391,7 +391,7 @@ MP_DEFINE_CONST_FUN_OBJ_0(mahony_get_twoKp_obj, mahony_get_twoKp);
 //
 // def get_twoKi() -> float:
 //
-STATIC mp_obj_t mahony_get_twoKi() {
+static mp_obj_t mahony_get_twoKi() {
     mp_float_t ret_val;
 
     ret_val = twoKi;
@@ -403,7 +403,7 @@ MP_DEFINE_CONST_FUN_OBJ_0(mahony_get_twoKi_obj, mahony_get_twoKi);
 //
 // def set_twoKi(twoKi : float) -> None:
 //
-STATIC mp_obj_t mahony_set_twoKi(mp_obj_t twoKi_obj) {
+static mp_obj_t mahony_set_twoKi(mp_obj_t twoKi_obj) {
     mp_float_t _twoKi = mp_obj_get_float(twoKi_obj);
 
     twoKi = _twoKi;
@@ -415,7 +415,7 @@ MP_DEFINE_CONST_FUN_OBJ_1(mahony_set_twoKi_obj, mahony_set_twoKi);
 //
 // def set_twoKp(twoKp : float) -> None:
 //
-STATIC mp_obj_t mahony_set_twoKp(mp_obj_t twoKp_obj) {
+static mp_obj_t mahony_set_twoKp(mp_obj_t twoKp_obj) {
     mp_float_t _twoKp = mp_obj_get_float(twoKp_obj);
 
     twoKp = _twoKp;
@@ -424,7 +424,7 @@ STATIC mp_obj_t mahony_set_twoKp(mp_obj_t twoKp_obj) {
 }
 MP_DEFINE_CONST_FUN_OBJ_1(mahony_set_twoKp_obj, mahony_set_twoKp);
 
-STATIC const mp_rom_map_elem_t mahony_module_globals_table[] = {
+static const mp_rom_map_elem_t mahony_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_mahony) },
     { MP_ROM_QSTR(MP_QSTR_MahonyAHRSupdate), MP_ROM_PTR(&mahony_MahonyAHRSupdate_obj) },
     { MP_ROM_QSTR(MP_QSTR_MahonyAHRSupdateIMU), MP_ROM_PTR(&mahony_MahonyAHRSupdateIMU_obj) },
@@ -440,7 +440,7 @@ STATIC const mp_rom_map_elem_t mahony_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_quaternion_to_angles), MP_ROM_PTR(&quaternion_to_angles_obj) },
 };
 
-STATIC MP_DEFINE_CONST_DICT(mahony_module_globals, mahony_module_globals_table);
+static MP_DEFINE_CONST_DICT(mahony_module_globals, mahony_module_globals_table);
 const mp_obj_module_t mahony_user_cmodule = {
     .base = {&mp_type_module},
     .globals = (mp_obj_dict_t *)&mahony_module_globals,
