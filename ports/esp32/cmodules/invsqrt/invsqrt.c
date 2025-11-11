@@ -11,7 +11,7 @@
 
 // function for madgwick.c and for mahony.c
 
-#define USE_VERSION 3
+// #define USE_VERSION 3
 
 float invSqrt(float x) {
     #if USE_VERSION == 1
@@ -49,7 +49,7 @@ float invSqrt(float x) {
 //
 // 1 / sqrt(x)
 //
-STATIC mp_obj_t invsqrt_invSqrt(mp_obj_t x_obj) {
+static mp_obj_t invsqrt_invSqrt(mp_obj_t x_obj) {
     mp_float_t x = mp_obj_get_float(x_obj);
     mp_float_t ret_val;
 
@@ -65,7 +65,7 @@ MP_DEFINE_CONST_FUN_OBJ_1(invsqrt_invSqrt_obj, invsqrt_invSqrt);
 // Fast inverse square-root
 // http://en.wikipedia.org/wiki/Fast_inverse_square_root
 //
-STATIC mp_obj_t invsqrt_invSqrt1(mp_obj_t x_obj) {
+static mp_obj_t invsqrt_invSqrt1(mp_obj_t x_obj) {
     mp_float_t x = mp_obj_get_float(x_obj);
     mp_float_t ret_val;
 
@@ -86,7 +86,7 @@ MP_DEFINE_CONST_FUN_OBJ_1(invsqrt_invSqrt1_obj, invsqrt_invSqrt1);
 // A Modification of the Fast Inverse SquareRoot Algorithm
 // https://www.researchgate.net/publication/335235981_A_Modification_of_the_Fast_Inverse_Square_Root_Algorithm
 //
-STATIC mp_obj_t invsqrt_invSqrt2(mp_obj_t x_obj) {
+static mp_obj_t invsqrt_invSqrt2(mp_obj_t x_obj) {
     mp_float_t x = mp_obj_get_float(x_obj);
     mp_float_t ret_val;
 
@@ -107,7 +107,7 @@ MP_DEFINE_CONST_FUN_OBJ_1(invsqrt_invSqrt2_obj, invsqrt_invSqrt2);
 // Fast Inverse Square Root. Pizer's Weblog
 // https://pizer.wordpress.com/2008/10/12/fast-inverse-square-root/
 //
-STATIC mp_obj_t invsqrt_invSqrt3(mp_obj_t x_obj) {
+static mp_obj_t invsqrt_invSqrt3(mp_obj_t x_obj) {
     mp_float_t x = mp_obj_get_float(x_obj);
     mp_float_t ret_val;
 
@@ -120,7 +120,7 @@ STATIC mp_obj_t invsqrt_invSqrt3(mp_obj_t x_obj) {
 MP_DEFINE_CONST_FUN_OBJ_1(invsqrt_invSqrt3_obj, invsqrt_invSqrt3);
 #endif
 
-STATIC const mp_rom_map_elem_t invsqrt_module_globals_table[] = {
+static const mp_rom_map_elem_t invsqrt_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_invsqrt) },
     { MP_ROM_QSTR(MP_QSTR_invSqrt), MP_ROM_PTR(&invsqrt_invSqrt_obj) },
     #if USE_VERSION == 1
@@ -134,7 +134,7 @@ STATIC const mp_rom_map_elem_t invsqrt_module_globals_table[] = {
     #endif
 };
 
-STATIC MP_DEFINE_CONST_DICT(invsqrt_module_globals, invsqrt_module_globals_table);
+static MP_DEFINE_CONST_DICT(invsqrt_module_globals, invsqrt_module_globals_table);
 const mp_obj_module_t invsqrt_user_cmodule = {
     .base = {&mp_type_module},
     .globals = (mp_obj_dict_t *)&invsqrt_module_globals,
