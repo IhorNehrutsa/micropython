@@ -16,6 +16,8 @@ extern const mp_obj_type_t machine_sdcard_type;
 #if SOC_TWAI_SUPPORTED
 extern const mp_obj_type_t machine_can_type;
 #endif
+extern const mp_obj_type_t machine_Counter_type;
+extern const mp_obj_type_t machine_Encoder_type;
 
 void machine_init(void);
 void machine_deinit(void);
@@ -24,6 +26,7 @@ void machine_pins_deinit(void);
 void machine_can_deinit_all();
 void machine_pwm_deinit_all(void);
 // TODO: void machine_rmt_deinit_all(void);
+void machine_encoder_deinit_all(void);
 void machine_timer_deinit_all(void);
 void machine_uart_deinit_all(void);
 void machine_i2s_init0();
