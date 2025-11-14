@@ -56,9 +56,10 @@
 #define MICROPY_PY_MACHINE_CAN_ENTRY { MP_ROM_QSTR(MP_QSTR_CAN), MP_ROM_PTR(&machine_can_type) },
 #else
 #define MICROPY_PY_MACHINE_CAN_ENTRY
+#endif
 #if MICROPY_PY_MACHINE_PCNT
-#define MICROPY_PY_MACHINE_PCNT_ENTRY { MP_ROM_QSTR(MP_QSTR_encoder), MP_ROM_PTR(&machine_Encoder_type) }, \
-    { MP_ROM_QSTR(MP_QSTR_counter), MP_ROM_PTR(&machine_Counter_type) },
+#define MICROPY_PY_MACHINE_PCNT_ENTRY { MP_ROM_QSTR(MP_QSTR_Encoder_), MP_ROM_PTR(&machine_Encoder_type) }, \
+    { MP_ROM_QSTR(MP_QSTR_Counter_), MP_ROM_PTR(&machine_Counter_type) },
 #else
 #define MICROPY_PY_MACHINE_PCNT_ENTRY
 #endif
