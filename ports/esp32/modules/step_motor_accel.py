@@ -1,5 +1,5 @@
 from gc import collect
-from machine import Pin, PWM, Counter
+from machine import Pin, PWM, Counter_
 from utime import sleep_us, ticks_us, ticks_diff
 
 from esp32_ import *
@@ -20,12 +20,12 @@ class StepMotorAccel(StepperAngle):
         self.reverse_direction = bool(reverse_direction)
 
         ### 1
-        if isinstance(counter, Counter):
+        if isinstance(counter, Counter_):
             self.counter = counter
         else:
-            self.counter = Counter(counter, src=self.pin_step, direction=self.pin_dir) #  , invert=reverse_direction)
+            self.counter = Counter_(counter, src=self.pin_step, direction=self.pin_dir) #  , invert=reverse_direction)
         self.correct_counter()
-
+        
         ### 2
         self.pwm = PWM(self.pin_step, freq=freq, duty_u16=0)  # 0%
         #self.us_step_period = 0  # round(1_000_000 / freq)
@@ -65,7 +65,7 @@ class StepMotorAccel(StepperAngle):
     # -----------------------------------------------------------------------
     @property
     def steps_counter(self) -> int:
-        return -self.counter.get_value() if self.reverse_direction else self.counter.get_value()
+        return -self.counter.value() if self.reverse_direction else self.counter.value()
 
     @property
     def angle_counter(self):
@@ -154,9 +154,9 @@ class StepMotorAccel(StepperAngle):
         self.dir(self.angle_target - angle_now)
 
         if self.pwm is not None:
-            #self.pwm.init(freq=abs(freq), duty_u16=32768)  # 50%
-            self.pwm.freq(abs(freq))
-            self.pwm.duty_u16(32768)  # 50%
+            self.pwm.init(freq=abs(freq), duty_u16=32768)  # 50%
+#             self.pwm.freq(abs(freq))
+#             self.pwm.duty_u16(32768)  # 50%
 
     def stop_pulses(self):
         try:
