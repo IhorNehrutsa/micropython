@@ -57,6 +57,7 @@ class Rotator():
     def start_timer(self):
         if self.is_thread <= 0:
             if self.timer is None:
+                #self.timer = Timer(3, mode=Timer.PERIODIC, period=self.rotator_period, callback=self.__handle_motors)
                 self.timer = Timer(-2, mode=Timer.PERIODIC, period=self.rotator_period, callback=self.__handle_motors)
                 # self.timer = Timer(-2, mode=Timer.ONE_SHOT, period=self.rotator_period, callback=self.__timer_motors)
 
