@@ -82,16 +82,44 @@ static void machine_timer_print(const mp_print_t *print, mp_obj_t self_in, mp_pr
     #endif
 }
 
-machine_timer_obj_t *machine_timer_create(mp_uint_t timer) {
+static bool find_free_timer(mp_int_t *group, mp_int_t *index) {
+    // from highest to lowest id
+    for (*group = SOC_TIMER_GROUPS - 1; *group >= 0; --(*group)) {
+        for (*index = SOC_TIMER_GROUP_TIMERS_PER_GROUP - 1; *index >= 0; --(*index)) {
+            bool free = true;
+            // Check whether the timer is already initialized, if so skip it
+            for (machine_timer_obj_t *t = MP_STATE_PORT(machine_timer_obj_head); t; t = t->next) {
+                if (t->group == *group && t->index == *index) {
+                    free = false;
+                    break;
+                }
+            }
+            if (free) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+machine_timer_obj_t *machine_timer_create(mp_int_t timer) {
 
     machine_timer_obj_t *self = NULL;
-    #if SOC_TIMER_GROUP_TIMERS_PER_GROUP == 1
-    mp_uint_t group = timer & 1;
-    mp_uint_t index = 0;
-    #else
-    mp_uint_t group = (timer >> 1) & 1;
-    mp_uint_t index = timer & 1;
-    #endif
+    mp_int_t group;
+    mp_int_t index;
+    if (timer == -2) {
+        if (!find_free_timer(&group, &index)) {
+            mp_raise_msg_varg(&mp_type_RuntimeError, MP_ERROR_TEXT("out of Timers:%d"), SOC_TIMER_GROUP_TOTAL_TIMERS);
+        }
+    } else {
+        #if SOC_TIMER_GROUP_TIMERS_PER_GROUP == 1
+        group = timer & 1;
+        index = 0;
+        #else
+        group = (timer >> 1) & 1;
+        index = timer & 1;
+        #endif
+    }
 
     // Check whether the timer is already initialized, if so use it
     for (machine_timer_obj_t *t = MP_STATE_PORT(machine_timer_obj_head); t; t = t->next) {
@@ -118,7 +146,7 @@ static mp_obj_t machine_timer_make_new(const mp_obj_type_t *type, size_t n_args,
     mp_arg_check_num(n_args, n_kw, 1, MP_OBJ_FUN_ARGS_MAX, true);
 
     // Create the new timer.
-    uint32_t timer_number = mp_obj_get_int(args[0]);
+    mp_int_t timer_number = mp_obj_get_int(args[0]);
     if (timer_number >= SOC_TIMER_GROUP_TOTAL_TIMERS) {
         mp_raise_ValueError(MP_ERROR_TEXT("invalid Timer number"));
     }

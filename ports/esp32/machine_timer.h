@@ -53,7 +53,7 @@ typedef struct _machine_timer_obj_t {
     struct _machine_timer_obj_t *next;
 } machine_timer_obj_t;
 
-machine_timer_obj_t *machine_timer_create(mp_uint_t timer);
+machine_timer_obj_t *machine_timer_create(mp_int_t timer);
 void machine_timer_enable(machine_timer_obj_t *self);
 void machine_timer_disable(machine_timer_obj_t *self);
 
