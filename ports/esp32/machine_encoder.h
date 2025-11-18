@@ -1,7 +1,7 @@
 #ifndef MICROPY_INCLUDED_MACHINE_ENCODER_H
 #define MICROPY_INCLUDED_MACHINE_ENCODER_H
 
-// #define USE_INT64
+#define USE_INT64
 #ifdef USE_INT64
 typedef int64_t counter_t;
 #else

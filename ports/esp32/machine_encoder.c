@@ -54,8 +54,11 @@ https://github.com/bboser/MicroPython_ESP32_psRAM_LoBo/blob/quad_decoder/MicroPy
 
 extern const mp_obj_type_t machine_pin_type;
 
+#ifdef USE_INT64
+#define GET_INT mp_obj_get_ll // Get 64-bit integer arg.
+#else
 #define GET_INT mp_obj_get_int_truncated
-// #define GET_INT mp_obj_get_ll_int // need PR: py\obj.c: Get 64-bit integer arg. #80896
+#endif
 
 static pcnt_isr_handle_t pcnt_isr_handle = NULL;
 static mp_pcnt_obj_t *pcnts[PCNT_UNIT_MAX] = {};
