@@ -10,21 +10,34 @@ class StepsPerRev():
         return f"StepsPerRev(steps_per_rev={self.steps_per_rev})"
 
     @micropython.native
-    def angle_to_steps(self, angle) -> int:
-        return round(self.steps_per_rev * angle / 360)
+    def angle_to_steps(self, angle, steps_per_rev=None) -> int:
+        if steps_per_rev is None:
+            return round(self.steps_per_rev * angle / 360)
+        else:
+            return round(steps_per_rev * angle / 360)
 
     @micropython.native
-    def steps_to_angle(self, steps) -> float:
-        return steps * 360 / self.steps_per_rev
+    def steps_to_angle(self, steps, steps_per_rev=None) -> float:
+        if steps_per_rev is None:
+            return steps * 360 / self.steps_per_rev
+        else:
+            return steps * 360 / steps_per_rev
 
     @micropython.native
-    def radian_to_steps(self, angle) -> int:
-        return round(self.steps_per_rev * angle / PI2)
+    def radian_to_steps(self, angle, steps_per_rev=None) -> int:
+        if steps_per_rev is None:
+            return round(self.steps_per_rev * angle / PI2)
+        else:
+            return round(steps_per_rev * angle / PI2)
 
     @micropython.native
-    def steps_to_radian(self, steps) -> float:
-        return steps * PI2 / self.steps_per_rev
-
+    def steps_to_radian(self, steps, steps_per_rev=None) -> float:
+        if steps_per_rev is None:
+            return steps * PI2 / self.steps_per_rev
+        else:
+            return steps * PI2 / steps_per_rev
+    
+    #------------------------------------------------------------
     @micropython.native
     def f_to_rps(self, f) -> float:  # rotates per second  # об/с
         return f / self.steps_per_rev
@@ -48,4 +61,3 @@ class StepsPerRev():
     @micropython.native
     def f_to_rps_(self, f, steps_per_rev) -> float:  # rotates per second  # об/с
         return f / steps_per_rev
-

@@ -25,7 +25,7 @@ class StepMotorAccel(StepperAngle):
         else:
             self.counter = Counter_(counter, src=self.pin_step, direction=self.pin_dir) #  , invert=reverse_direction)
         self.correct_counter()
-        
+
         ### 2
         self.pwm = PWM(self.pin_step, freq=freq, duty_u16=0)  # 0%
         #self.us_step_period = 0  # round(1_000_000 / freq)

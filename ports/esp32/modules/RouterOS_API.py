@@ -217,11 +217,8 @@ class ApiRos:
             received = self.skt.recv(1)
             if received == b'':
                 raise RuntimeError(ECONNRESET)
-        #print('readByte() received', received,  int.from_bytes(received, 'big'))
-        if is_micropython:
-            return int.from_bytes(received, 'big')
-        else:
-            return int.from_bytes(received, byteorder='big')
+        #print('readByte() received', received,  int.from_bytes(received, byteorder='big'))
+        int.from_bytes(received, byteorder='big')
 
     def readStr(self, length):
         ret = b""

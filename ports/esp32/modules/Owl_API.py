@@ -168,7 +168,7 @@ def calc_angles(owl, motor):
 
 
 class Owl(object):
-    ID = int.from_bytes(unique_id(), 'big')
+    ID = int.from_bytes(unique_id(), byteorder='big')
 
     SSID = ''
 

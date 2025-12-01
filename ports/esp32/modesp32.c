@@ -226,7 +226,7 @@ static mp_obj_t esp32_idf_heap_info(const mp_obj_t cap_in) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(esp32_idf_heap_info_obj, esp32_idf_heap_info);
 
-#if CONFIG_FREERTOS_USE_TRACE_FACILITY
+//#if CONFIG_FREERTOS_USE_TRACE_FACILITY
 static mp_obj_t esp32_idf_task_info(void) {
     const size_t task_count_max = uxTaskGetNumberOfTasks();
     TaskStatus_t *task_array = m_new(TaskStatus_t, task_count_max);
@@ -246,7 +246,7 @@ static mp_obj_t esp32_idf_task_info(void) {
             mp_const_none,
             #endif
             mp_obj_new_int_from_uint(task_array[i].usStackHighWaterMark),
-            #if CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID
+            #if 1 // CONFIG_FREERTOS_VTASKLIST_INCLUDE_COREID
             MP_OBJ_NEW_SMALL_INT(task_array[i].xCoreID),
             #else
             mp_const_none,
@@ -267,7 +267,7 @@ static mp_obj_t esp32_idf_task_info(void) {
     return mp_obj_new_tuple(2, task_stats);
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(esp32_idf_task_info_obj, esp32_idf_task_info);
-#endif
+//#endif
 
 static const mp_rom_map_elem_t esp32_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_esp32) },
@@ -293,9 +293,9 @@ static const mp_rom_map_elem_t esp32_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_mcu_temperature), MP_ROM_PTR(&esp32_mcu_temperature_obj) },
     #endif
     { MP_ROM_QSTR(MP_QSTR_idf_heap_info), MP_ROM_PTR(&esp32_idf_heap_info_obj) },
-    #if CONFIG_FREERTOS_USE_TRACE_FACILITY
+    //#if CONFIG_FREERTOS_USE_TRACE_FACILITY
     { MP_ROM_QSTR(MP_QSTR_idf_task_info), MP_ROM_PTR(&esp32_idf_task_info_obj) },
-    #endif
+    //#endif
 
     { MP_ROM_QSTR(MP_QSTR_NVS), MP_ROM_PTR(&esp32_nvs_type) },
     { MP_ROM_QSTR(MP_QSTR_Partition), MP_ROM_PTR(&esp32_partition_type) },

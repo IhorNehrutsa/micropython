@@ -80,7 +80,8 @@ MP_NORETURN void esp_exceptions_helper(esp_err_t e) {
         case ESP_ERR_NO_MEM:
             mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("WiFi Out of Memory"));
         default:
-            mp_raise_msg_varg(&mp_type_RuntimeError, MP_ERROR_TEXT("Wifi Unknown Error 0x%04x"), e);
+            //mp_raise_msg_varg(&mp_type_RuntimeError, MP_ERROR_TEXT("Wifi Unknown Error 0x%04x "), e);
+            mp_raise_msg_varg(&mp_type_RuntimeError, MP_ERROR_TEXT("Wifi Unknown Error 0x%04x, ESP_ERR_WIFI_BASE=0x%04x"), e, ESP_ERR_WIFI_BASE);
     }
 }
 

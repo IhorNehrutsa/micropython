@@ -64,7 +64,7 @@ static esp32_can_obj_t *esp32_can_objs[SOC_TWAI_CONTROLLER_NUM] = {};
 // INTERNAL Deinitialize can
 void can_deinit(esp32_can_obj_t *self) {
     if (self->handle) {
-        check_esp_err(twai_stop_v2(self->handle));
+        twai_stop_v2(self->handle);
         check_esp_err(twai_driver_uninstall_v2(self->handle));
         self->handle = NULL;
     }
@@ -118,34 +118,31 @@ static void esp32_can_irq_task(void *self_in) {
     esp32_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
     uint32_t alerts;
 
-    check_esp_err(twai_reconfigure_alerts_v2(self->handle, TWAI_ALERT_ALL,
-        // TWAI_ALERT_RX_DATA | TWAI_ALERT_RX_QUEUE_FULL | TWAI_ALERT_BUS_OFF | TWAI_ALERT_ERR_PASS |
-        // TWAI_ALERT_ABOVE_ERR_WARN | TWAI_ALERT_TX_FAILED | TWAI_ALERT_TX_SUCCESS | TWAI_ALERT_BUS_RECOVERED,
-        // TWAI_ALERT_TX_IDLE | TWAI_ALERT_BELOW_ERR_WARN | TWAI_ALERT_ERR_ACTIVE | TWAI_ALERT_RECOVERY_IN_PROGRESS |
-        // TWAI_ALERT_ARB_LOST | TWAI_ALERT_BUS_ERROR | TWAI_ALERT_RX_FIFO_OVERRUN | TWAI_ALERT_TX_RETRIED | TWAI_ALERT_PERIPH_RESET,
-        NULL
-        ));
-
+    check_esp_err(twai_reconfigure_alerts_v2(self->handle, TWAI_ALERT_ALL, NULL));
     while (1) {
         check_esp_err(twai_read_alerts_v2(self->handle, &alerts, portMAX_DELAY));
 
         if (alerts & TWAI_ALERT_BUS_OFF) {
+            debug_printf("Bus Off state");
+            ++self->num_bus_off;
             for (int i = 3; i > 0; i--) {
                 vTaskDelay(pdMS_TO_TICKS(1000));
             }
             twai_initiate_recovery_v2(self->handle); // Needs 128 occurrences of bus free signal
-        }
-        if (alerts & TWAI_ALERT_BUS_OFF) {
-            ++self->num_bus_off;
+            //debug_printf("Initiate bus recovery");
         }
         if (alerts & TWAI_ALERT_ERR_PASS) {
+            //debug_printf("Entered Error Passive state");
             ++self->num_error_passive;
         }
         if (alerts & TWAI_ALERT_ABOVE_ERR_WARN) {
+            //debug_printf("Surpassed Error Warning Limit");
             ++self->num_error_warning;
         }
         if (alerts & (TWAI_ALERT_BUS_RECOVERED)) {
+            debug_printf("Bus Recovered");
             self->bus_recovery_success = 1;
+            check_esp_err(twai_start_v2(self->handle));
         }
 
         if (alerts & (TWAI_ALERT_TX_FAILED | TWAI_ALERT_TX_SUCCESS)) {
@@ -328,7 +325,12 @@ static mp_obj_t esp32_can_init_helper(esp32_can_obj_t *self, size_t n_args, cons
             mp_raise_ValueError(MP_ERROR_TEXT("Unable to set bitrate"));
             return mp_const_none;
     }
-
+    /*
+    esp_err_t err= twai_driver_install_v2(&self->g_config, &self->t_config, &self->f_config, &self->handle);
+    if ((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE)) {
+        check_esp_err(err);
+    }
+    */
     check_esp_err(twai_driver_install_v2(&self->g_config, &self->t_config, &self->f_config, &self->handle));
     check_esp_err(twai_start_v2(self->handle));
     if (xTaskCreatePinnedToCore(esp32_can_irq_task, "can_irq_task", CAN_TASK_STACK_SIZE, self, CAN_TASK_PRIORITY, (TaskHandle_t *)&self->irq_handler, MP_TASK_COREID) != pdPASS) {
@@ -408,7 +410,7 @@ static mp_obj_t esp32_can_restart(mp_obj_t self_in) {
     mp_hal_delay_ms(200); // FIXME: replace it with a smarter solution
 
     while (self->bus_recovery_success < 0) {
-        MICROPY_EVENT_POLL_HOOK
+        MICROPY_EVENT_POLL_HOOK;
     }
 
     if (self->bus_recovery_success) {
@@ -525,7 +527,7 @@ static mp_obj_t esp32_can_send(size_t n_args, const mp_obj_t *pos_args, mp_map_t
                         mp_raise_OSError(MP_ETIMEDOUT);
                     }
                 }
-                MICROPY_EVENT_POLL_HOOK
+                MICROPY_EVENT_POLL_HOOK;
             }
 
             if (!self->last_tx_success) {
@@ -555,9 +557,25 @@ static mp_obj_t esp32_can_recv(size_t n_args, const mp_obj_t *pos_args, mp_map_t
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all(n_args - 1, pos_args + 1, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
+    uint32_t timeout_ms = args[ARG_timeout].u_int;
+
+    check_esp_err(twai_get_status_info_v2(self->handle, &self->status));
+    //debug_printf("1 state:%d", self->status.state);
+    uint32_t start = mp_hal_ticks_ms();
+    while (self->status.state != TWAI_STATE_RUNNING) {
+        if (timeout_ms != portMAX_DELAY) {
+            if (mp_hal_ticks_ms() - start >= timeout_ms) {
+                mp_raise_OSError(MP_ETIMEDOUT);
+            }
+        }
+        MICROPY_EVENT_POLL_HOOK;
+        check_esp_err(twai_get_status_info_v2(self->handle, &self->status));
+    }
+    //debug_printf("2 state:%d", self->status.state);
+
     // receive the data
     twai_message_t rx_msg;
-    check_esp_err(twai_receive_v2(self->handle, &rx_msg, pdMS_TO_TICKS(args[ARG_timeout].u_int)));
+    check_esp_err(twai_receive_v2(self->handle, &rx_msg, pdMS_TO_TICKS(timeout_ms)));
     uint32_t rx_dlc = rx_msg.data_length_code;
 
     // Create the tuple, or get the list, that will hold the return values
@@ -604,15 +622,21 @@ static mp_obj_t esp32_can_clearfilter(mp_obj_t self_in) {
     esp32_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
 
     // Defaults from TWAI_FILTER_CONFIG_ACCEPT_ALL
-    self->f_config = (twai_filter_config_t)TWAI_FILTER_CONFIG_ACCEPT_ALL();;
+    self->f_config = (twai_filter_config_t)TWAI_FILTER_CONFIG_ACCEPT_ALL();
 
     // Apply filter
     check_esp_err(twai_stop_v2(self->handle));
     check_esp_err(twai_driver_uninstall_v2(self->handle));
-    check_esp_err(twai_driver_install_v2(
+    /*
+    esp_err_t err= twai_driver_install_v2(
         &self->g_config,
         &self->t_config,
-        &self->f_config, &self->handle));
+        &self->f_config, &self->handle);
+    if ((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE)) {
+        check_esp_err(err);
+    }
+    */
+    check_esp_err(twai_driver_install_v2(&self->g_config, &self->t_config, &self->f_config, &self->handle));
     check_esp_err(twai_start_v2(self->handle));
     return mp_const_none;
 }
@@ -702,12 +726,18 @@ static mp_obj_t esp32_can_set_filters(size_t n_args, const mp_obj_t *pos_args, m
         check_esp_err(twai_stop_v2(self->handle));
         check_esp_err(twai_driver_uninstall_v2(self->handle));
     }
-    check_esp_err(twai_driver_install_v2(
+    /*
+    esp_err_t err= twai_driver_install_v2(
         &self->g_config,
         &self->t_config,
         &self->f_config,
         &self->handle
-        ));
+        );
+    if ((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE)) {
+        check_esp_err(err);
+    }
+    */
+    check_esp_err(twai_driver_install_v2(&self->g_config, &self->t_config, &self->f_config, &self->handle));
     check_esp_err(twai_start_v2(self->handle));
     return mp_const_none;
 }

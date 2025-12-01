@@ -57,9 +57,9 @@ class Rotator():
     def start_timer(self):
         if self.is_thread <= 0:
             if self.timer is None:
-                #self.timer = Timer(3, mode=Timer.PERIODIC, period=self.rotator_period, callback=self.__handle_motors)
                 self.timer = Timer(-2, mode=Timer.PERIODIC, period=self.rotator_period, callback=self.__handle_motors)
                 # self.timer = Timer(-2, mode=Timer.ONE_SHOT, period=self.rotator_period, callback=self.__timer_motors)
+                #self.timer = Timer(3, mode=Timer.PERIODIC, period=self.rotator_period, callback=self.__handle_motors)
 
     def deinit_timer(self):
         if self.timer is not None:
@@ -174,6 +174,10 @@ class Rotator():
             while self.is_thread == 0:
                 sleep_ms(20)
             print('stop_thread(), self.is_thread', self.is_thread)
+
+    def go(self):
+        self.azim.go()
+        self.elev.go()
 
     @property
     def ready(self):
