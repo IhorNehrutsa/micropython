@@ -241,6 +241,7 @@ Constants
           machine.WDT_RESET
           machine.DEEPSLEEP_RESET
           machine.SOFT_RESET
+          machine.BROWNOUT_RESET - (ESP32 specific)
 
     Reset causes.
 
@@ -261,6 +262,7 @@ Classes
    machine.ADC.rst
    machine.ADCBlock.rst
    machine.CAN.rst
+   machine.DAC.rst
    machine.PWM.rst
    machine.UART.rst
    machine.SPI.rst
