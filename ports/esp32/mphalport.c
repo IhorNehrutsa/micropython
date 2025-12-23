@@ -83,6 +83,7 @@ void check_esp_err_(esp_err_t code, const char *func, const int line, const char
         // construct string object
         mp_obj_str_t *o_str = m_new_obj_maybe(mp_obj_str_t);
         if (o_str == NULL) {
+            printf("pcode:0x%X", code);
             mp_raise_OSError(pcode);
             return;
         }
