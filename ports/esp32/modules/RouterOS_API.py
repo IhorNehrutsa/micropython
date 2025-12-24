@@ -100,7 +100,7 @@ class ApiRos:
         try:
             self.skt.settimeout(5)
             for repl, attrs in self.talk(["/login", "=name=" + username, "=password=" + pwd]):
-                print(f'repl>{repl}<, attrs>{attrs}<, username>{username}<')
+                #print(f'repl>{repl}<, attrs>{attrs}<, username>{username}<')
                 if repl == "!trap":
                     return False
                 elif "=ret" in attrs.keys():
@@ -110,7 +110,7 @@ class ApiRos:
                     md.update(pwd.encode())
                     md.update(chal)
                     for repl2, attrs2 in self.talk(["/login", "=name=" + username, "=response=00" + binascii.hexlify(md.digest()).decode()]):
-                        print(f'repl2>{repl}<, attrs2>{attrs2}<')
+                        #print(f'repl2>{repl}<, attrs2>{attrs2}<')
                         if repl2 == "!trap":
                             return False
             print("RouterOS logged:", username)
@@ -118,7 +118,7 @@ class ApiRos:
             self.skt.settimeout(0)
             return True
         except Exception as e:
-            print(f'login() e>{e}<, e.args[0]>{e.args[0]}< username>{username}<')
+            print(f'login():>{e}<, e.args[0]>{e.args[0]}< username>{username}<')
             if e.args[0] not in (EAGAIN, ETIMEDOUT, 10035):
                 self.ee = e
                 self.state = self.ERROR + 1
@@ -130,8 +130,8 @@ class ApiRos:
         r = []
         if len(words) == 0:
             return r
-        self.writeSentence(words)
         #print(words)
+        self.writeSentence(words)
         while True:
             response = self.readSentence()
             #print(response)
@@ -218,7 +218,7 @@ class ApiRos:
             if received == b'':
                 raise RuntimeError(ECONNRESET)
         #print('readByte() received', received,  int.from_bytes(received, byteorder='big'))
-        int.from_bytes(received, byteorder='big')
+        return int.from_bytes(received, byteorder='big')
 
     def readStr(self, length):
         ret = b""
