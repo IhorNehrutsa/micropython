@@ -46,8 +46,8 @@ Pizer's Weblog
 // Definitions
 
 // #define sampleFreq  512.0f // sample frequency in Hz
-#define twoKpDef    (2.0f * 0.5f)   // 2 * proportional gain
-#define twoKiDef    (2.0f * 0.0f)   // 2 * integral gain
+#define twoKpDef    (2.0f * 0.5f)   // 2 * proportional gain // від 0.1 до 10
+#define twoKiDef    (2.0f * 0.0f)   // 2 * integral gain // від 0.001 до 0.1
 
 // ---------------------------------------------------------------------------------------------------
 // Variable definitions
