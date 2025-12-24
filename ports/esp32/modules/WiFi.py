@@ -47,8 +47,13 @@ net_state = NET_STA_IMPORT
 net_time = time()
 
 wlan_ap = network.WLAN(network.AP_IF)
+wlan_ap.active(False)
+#wlan_ap.config(pm=wlan_ap.PM_NONE)
+
 wlan_sta = network.WLAN(network.STA_IF)
 wlan_sta.active(True)
+wlan_sta.config(pm=wlan_sta.PM_NONE)
+
 wlan_status = None
 
 ssid_list = []
@@ -130,11 +135,14 @@ def WiFi_connect(prn=False):
             if wlan_sta.isconnected():
                 wlan_sta.disconnect()
                 PRINT and print('wlan_sta.disconnect()')
+                sleep_ms(500)
 
         if OWL_IP.lower() == 'dhcp':
             if wlan_sta.ifconfig()[0] != '0.0.0.0':
                 if wlan_sta.isconnected():
                     wlan_sta.disconnect()
+                    PRINT and print('wlan_sta.disconnect()')
+                    sleep_ms(500)
                 wlan_sta.ifconfig(('dhcp'))
         else:
             wlan_sta.ifconfig((OWL_IP, OWL_SUBNET, OWL_GATEWAY, OWL_DNS))
@@ -176,6 +184,8 @@ def WiFi_connect(prn=False):
         if wlan_sta.active():
             if wlan_sta.isconnected():
                 wlan_sta.disconnect()
+                PRINT and print('wlan_sta.disconnect()')
+                sleep_ms(500)
             ### wlan_sta.active(False)
         wlan_ap.active(True)
         wlan_ap.config(ssid='ESP-AP-' + SSID)
