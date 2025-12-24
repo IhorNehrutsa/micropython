@@ -46,11 +46,11 @@
 
 #if MICROPY_PY_MACHINE_CAN
 
-#define debug_printf(...)  mp_printf(&mp_plat_print, __VA_ARGS__); mp_printf(&mp_plat_print, " | %d at %s\n", __LINE__, __FILE__);
+#define debug_printf(...) mp_printf(&mp_plat_print, __VA_ARGS__); mp_printf(&mp_plat_print, " | %d at %s\n", __LINE__, __FILE__);
 
 // Default bitrate: 500kb
 #define CAN_TASK_PRIORITY           (ESP_TASK_PRIO_MIN + 1)
-#define CAN_TASK_STACK_SIZE         (1024)
+#define CAN_TASK_STACK_SIZE         (1024 * 2)
 #define CAN_DEFAULT_PRESCALER (8)
 #define CAN_DEFAULT_SJW (3)
 #define CAN_DEFAULT_BS1 (15)
