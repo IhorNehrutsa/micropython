@@ -7,7 +7,7 @@ from machine import SPI, Pin
 __MSB_mask = const(0x4000)  # for lower 15 bits
 __to_angle = 360 / 0x4000
 
-@micropython.native
+#@micropython.native
 def is_even(data, msb_mask):
     # Calc parity bit
     even = False
@@ -183,9 +183,10 @@ class AS5x47():
         
         self.spi = spi
         self.tclk_2_us = 1_000_000 // (spi_baudrate * 2)  # tH = tclk / 2 ns # Time between last falling edge of CLK and rising edge of cs
-        if self.tclk_2_us == 0:
-            self.tclk_2_us = 1
-        #print('self.tclk_2_us:', self.tclk_2_us)
+#         if self.tclk_2_us == 0:
+#             self.tclk_2_us = 1
+        self.tclk_2_us += 10
+        print('AS5x47:tclk/2 us:', self.tclk_2_us)
         self.cs = cs  # active is low
 
         self._write_command = bytearray(b'\xC0\x00')
@@ -198,6 +199,8 @@ class AS5x47():
         
         self.error = self.NO_error
 
+        print('AS5x47:ERRFL:', self.read_ERRFL())
+        print('AS5x47:DIAAGC:', self.read_DIAAGC())
         self._angle14 = 0
         self.readAngleCom() #  set _angle14 !!!
         self.readAngleCom()
@@ -210,7 +213,7 @@ class AS5x47():
         self._angle_major = 0
         
     # ------------------
-    @micropython.native
+    #@micropython.native
     def _readAngleInfinity(self, readAngleFunc):
         readAngleFunc()
         if not self.error:
@@ -220,14 +223,12 @@ class AS5x47():
             elif delta <= -0x2000:
                 self._angle_major += 0x4000
             self._angle14_prev = self._angle14
-            return (self._angle14 + self._angle_major) * __to_angle
-        else:
-            return None
+        return (self._angle14 + self._angle_major) * __to_angle
 
     def __repr__(self):
         return 'AS5x47(spi={}, cs={})'.format(self.spi, self.cs)
 
-    @micropython.viper
+    #@micropython.viper
     def writeData(self, command, value):
         # Send command
         self.cs(0)
@@ -242,23 +243,28 @@ class AS5x47():
         self.cs(1)
 
     # after every spi.write_readinto()
-    @micropython.native
-    def checkReceivedFrame(self):
+    #@micropython.native
+    def checkReceivedFrame(self, where=''):
         if self.received_frame.EF: 
-            #raise RuntimeError('received_frame.EF on 0x%X' % self.command_frame.ADDR)
-            #print('received_frame.EF on 0x%X' % self.command_frame.ADDR)
+            print('received_frame.EF on 0x%X' % self.command_frame.ADDR)
             self.error = self.EF_error
-        elif self.received_frame.PARD != is_even(self.received_frame.DATA, __MSB_mask):
-            #raise ValueError('received_frame.PARD != is_even on 0x%X' % self.command_frame.ADDR)
-            #print('received_frame.PARD != is_even on 0x%X' % self.command_frame.ADDR)
+            #raise
+        #el
+        if self.received_frame.PARD != is_even(self.received_frame.DATA, __MSB_mask):
+            print('received_frame.PARD != is_even on 0x%X' % self.command_frame.ADDR)
+            print(where, self.EF_error, self.received_frame.PARD, self.received_frame.DATA, self._received_data)
             self.error = self.PARD_error
-        elif self._received_data == b'\xff\xff':
-            #print("_received_data == b'\xff\xff'")
+            #raise
+        #el
+        if self._received_data == b'\xff\xff':
+            print("_received_data == b'\xff\xff'")
             self.error = self.DATA_error
+            #raise
         else:
             self.error = self.NO_error
+        #print("checkReceivedFrame()", where)            
 
-    @micropython.viper
+    #@micropython.viper
     def readData(self, command):
         # Send Read Command
         self._write_command = command  # bytes_at(addressof(command), sizeof(command))
@@ -270,27 +276,26 @@ class AS5x47():
         # Send Read Command while receiving data
         self.cs(0)
         self.spi.write_readinto(self._write_command, self._received_data)
-#         sleep_us(self.tclk_2_us)
-#         self.cs(1)
-        
-        self.checkReceivedFrame()
+        sleep_us(self.tclk_2_us)
         self.cs(1)
+        
+        self.checkReceivedFrame("readData")
 
-    @micropython.viper
+    #@micropython.viper
     def readDataAgain(self):
+        # Send Read Command while receiving data
         self.cs(0)
         self.spi.write_readinto(self._write_command, self._received_data)
-#         sleep_us(self.tclk_2_us)
-#         self.cs(1)
-
-        self.checkReceivedFrame()
+        sleep_us(self.tclk_2_us)
         self.cs(1)
 
-    @micropython.viper
+        self.checkReceivedFrame("readDataAgain")
+
+    #@micropython.viper
     def receivedFrameStruct(self, received_frame):
         return struct(addressof(received_frame), Read_Data_Frame_struct, BIG_ENDIAN)
 
-    @micropython.native
+    #@micropython.native
     def readRegister(self, registerAddress):
         self.command_frame.ADDR = registerAddress
         self.command_frame.R_W = READ
@@ -298,11 +303,11 @@ class AS5x47():
 
         self.readData(self.command_frame)
 
-#     @micropython.viper
+#     #@micropython.viper
 #     def readRegisterAgain(self):
 #         self.readDataAgain()
 
-    @micropython.native
+    #@micropython.native
     def writeRegister(self, registerAddress, registerValue):
         self.command_frame.ADDR = registerAddress
         self.command_frame.R_W = WRITE
@@ -315,49 +320,65 @@ class AS5x47():
         self.writeData(self.command_frame, self.data_frame)
 
 #     # ------------------
-#     @micropython.viper
+#     #@micropython.viper
 #     def readAngle(self):
 #         self.readRegister(ANGLEUNC)
 #         if not self.error:
 #             self._angle14 = struct(addressof(self._received_data), ANGLEUNC_struct, BIG_ENDIAN).CORDICANG
 # 
-#     @micropython.viper
+#     #@micropython.viper
 #     def readAngleAgain(self):
 #         self.readDataAgain()
 #         if not self.error:
 #             self._angle14 = struct(addressof(self._received_data), ANGLEUNC_struct, BIG_ENDIAN).CORDICANG
 # 
-#     @micropython.viper
+#     #@micropython.viper
 #     def readAngleInfinity(self):
 #         return self._readAngleInfinity(self.readAngleAgain)
  
     # ------------------
-    @micropython.viper
+    #@micropython.viper
     def readAngleCom(self):
         self.readRegister(ANGLECOM)
         if not self.error:
             self._angle14 = struct(addressof(self._received_data), ANGLECOM_struct, BIG_ENDIAN).DAECANG
+        return self._angle14
 
-    @micropython.viper
+    #@micropython.viper
     def readAngleComAgain(self):
         self.readDataAgain()
         if not self.error:
             self._angle14 = struct(addressof(self._received_data), ANGLECOM_struct, BIG_ENDIAN).DAECANG
+        return self._angle14
 
-    @micropython.viper
+    #@micropython.viper
     def readAngleComInfinity(self):
         return self._readAngleInfinity(self.readAngleComAgain)
 
     # ------------------
-#     @micropython.viper
+#     #@micropython.viper
 #     def writeSettings1(self, value):
 #         self.writeRegister(SETTINGS1, value)
 # 
-#     @micropython.viper
+#     #@micropython.viper
 #     def writeSettings2(self, value):
 #         self.writeRegister(SETTINGS2, value)
 # 
-#     @micropython.viper
+#     #@micropython.viper
 #     def writeZeroPosition(self, zposm, zposl):
 #         self.writeRegister(ZPOSM, zposm)
 #         self.writeRegister(ZPOSL, zposl)
+
+
+    def read_DIAAGC(self):
+        self.readRegister(DIAAGC)
+        if not self.error:
+            s = struct(addressof(self._received_data), DIAAGC_struct, BIG_ENDIAN)
+            return {'MAGL':s.MAGL, 'MAGH':s.MAGH, 'COF':s.COF, 'LF':s.LF, 'AGC':s.AGC}
+
+    def read_ERRFL(self):
+        self.readRegister(ERRFL)
+        
+        if not self.error:
+            s = struct(addressof(self._received_data), ERRFL_struct, BIG_ENDIAN)
+            return {'PARERR':s.PARERR, 'INVCOMM':s.INVCOMM, 'FRERR':s.FRERR}
