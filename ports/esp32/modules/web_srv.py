@@ -57,9 +57,9 @@ file.close()
 
 
 def show_index_page(server, arg, owl):
-    if WiFi.wlan_ap.active():
-        show_config_WiFi_page(server, arg, owl)
-        return
+#     if WiFi.wlan_ap.active():
+#         show_config_WiFi_page(server, arg, owl)
+#         return
 
     if arg == "/?":
         owl.autorefresh = False
@@ -294,8 +294,11 @@ def arg2val(arg):
 
 def do_get(server, arg, owl):
     val, s = arg2val(arg)
+    #print(val, s)
     if val is not None:
         if arg.find("input_a=") > 0:
+            if val == '':
+                val = 0
             owl.input_azim = val
             if arg.find("&max=") > 0:
                 if val <= owl.azim.mover.angle_max_limit:
@@ -309,7 +312,11 @@ def do_get(server, arg, owl):
                         save_config_search(owl)
             else:
                 owl.azim.angle_target = val
+                if owl.rotor.timer is None:
+                    owl.azim.mover.go()
         elif arg.find("input_e=") > 0:
+            if val == '':
+                val = 0
             owl.input_elev = val
             if arg.find("&max=") > 0:
                 if val <= owl.elev.mover.angle_max_limit:
@@ -323,6 +330,8 @@ def do_get(server, arg, owl):
                         save_config_search(owl)
             else:
                 owl.elev.angle_target = val
+                if owl.rotor.timer is None:
+                    owl.elev.mover.go()
     show_index_page(server, arg, owl)
     owl.auto_start = False
 
@@ -341,8 +350,7 @@ def do_get_config(server, arg, owl):
             elif arg.find("PASSWORD=") >= 0:
                 if owl.ROUTEROS_PASSWORD != s:
                     owl.ROUTEROS_PASSWORD = s
-            elif arg.find("radio_name=") >= 0:
-                owl.RADIO_NAME = val
+            elif arg.find("RADIO_NAME=") >= 0:
                 owl.RADIO_NAME = val
                 if owl.ros_api:
                     owl.ros_api.radio_name = b"=radio-name=" + owl.RADIO_NAME
@@ -414,24 +422,32 @@ def do_get_debug(server, arg, owl):
 #--------------------------------------------------------
 def do_CW(server, arg, owl):
     owl.azim.angle_target = round(owl.azim.angle_target + 1, 1)
+    if owl.rotor.timer is None:
+        owl.azim.mover.go()
     show_index_page(server, arg, owl)
     owl.auto_start = False
 
 
 def do_CCW(server, arg, owl):
     owl.azim.angle_target = round(owl.azim.angle_target - 1, 1)
+    if owl.rotor.timer is None:
+        owl.azim.mover.go()
     show_index_page(server, arg, owl)
     owl.auto_start = False
 
 
 def do_UP(server, arg, owl):
     owl.elev.angle_target = round(owl.elev.angle_target + 1, 1)
+    if owl.rotor.timer is None:
+        owl.elev.mover.go()
     show_index_page(server, arg, owl)
     owl.auto_start = False
 
 
 def do_DOWN(server, arg, owl):
     owl.elev.angle_target = round(owl.elev.angle_target - 1, 1)
+    if owl.rotor.timer is None:
+        owl.elev.mover.go()
     show_index_page(server, arg, owl)
     owl.auto_start = False
 
@@ -440,5 +456,8 @@ def park(server, arg, owl):
     print("Park")
     owl.azim.angle_target = 0
     owl.elev.angle_target = 0
+    if owl.rotor.timer is None:
+        owl.azim.mover.go()
+        owl.elev.mover.go()
     owl.mode = owl.MD_MANUAL
     show_index_page(server, arg, owl)
