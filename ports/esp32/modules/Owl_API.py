@@ -211,8 +211,9 @@ class Owl(object):
     CM_STAY = 5
     CM_ESCORT = 6
 
-    def __init__(self, azim, elev, sensors, ros_params):
+    def __init__(self, azim, elev, sensors, rotor, ros_params):
         self.sensors = sensors
+        self.rotor = rotor
         self.ros_api = None  # неблокирующий сокет для чтения SNR и Signal-strength
         self.ros_api2 = None  # блокирующий сокет для выполнения команд управления
         self.ros_command2 = None
