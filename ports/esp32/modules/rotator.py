@@ -1,11 +1,13 @@
 # rotator.py
 
-from time import ticks_ms, ticks_diff, sleep_ms
+from sys import print_exception
+from micropython import schedule
+#from _thread import start_new_thread
+from utime import ticks_ms, ticks_diff, sleep_ms, time
 from machine import Timer
-from _thread import start_new_thread
 import power
 
-BREAK_ANGLE = 360 * 2 
+BREAK_ANGLE = 360
 
 
 class Rotator():
@@ -22,12 +24,12 @@ class Rotator():
 
         self.rotator_period = rotator_period
 
-        self.is_handle_motors = False
+#        self.is_handle_motors = False
 
         self.timer = None
 
         self.is_thread = 0
-        self.thread_ms = ticks_ms()
+#         self.thread_ms = ticks_ms()
 
     def __repr__(self):
         return f"Rotator(azim={self.azim}, elev={self.elev}, sensors={self.sensors}, rotator_period={self.rotator_period})"
@@ -38,7 +40,7 @@ class Rotator():
 
     def deinit(self):
         try:
-            self.deinit_timer()
+            self.timer_deinit()
         except:
             pass
         try:
@@ -57,18 +59,17 @@ class Rotator():
     def start_timer(self):
         if self.is_thread <= 0:
             if self.timer is None:
-                self.timer = Timer(-2, mode=Timer.PERIODIC, period=self.rotator_period, callback=self.__handle_motors)
-                # self.timer = Timer(-2, mode=Timer.ONE_SHOT, period=self.rotator_period, callback=self.__timer_motors)
-                #self.timer = Timer(3, mode=Timer.PERIODIC, period=self.rotator_period, callback=self.__handle_motors)
+                #self.timer = Timer(-2, mode=Timer.PERIODIC, period=self.rotator_period, callback=self.__timer_callback)
+                self.timer = Timer(3, mode=Timer.PERIODIC, period=self.rotator_period, callback=self.__timer_callback)
 
-    def deinit_timer(self):
+    def timer_deinit(self):
         if self.timer is not None:
             try:
                 self.timer.deinit()
-                print('rotator.py: timer.deinit()')
-            except Exception as e:
+                print('Rotator.timer.deinit()')
+            except:
                 pass
-        self.timer = None
+            self.timer = None
 
     #@micropython.native
     def handle_sensors(self):
@@ -76,14 +77,14 @@ class Rotator():
 
         self.sensors.handle()
 
-        tmp = ticks_diff(ticks_ms(), t)
-        if tmp > 0:
-            self.dt_handle_sensors = tmp
+        t = ticks_diff(ticks_ms(), t)
+        if t > 0:
+            self.dt_handle_sensors = t
 
     #@micropython.native
     def handle_motors(self):
-        # print('handle_motors()')
-        try:
+        #print('handle_motors()', time())
+        #return
             t = ticks_ms()
 
             self.rotator_period_real = ticks_diff(t, self.t_handle_motors)
@@ -92,12 +93,11 @@ class Rotator():
 #             if self.is_handle_motors:
 #                 print('handle_motors() too long !!! self.rotator_period_real=', self.rotator_period_real)
 #                 return
-            while not self.is_handle_motors:
-                self.is_handle_motors = True
+
+#             while not self.is_handle_motors:
+#                 self.is_handle_motors = True
 
     #        t = ticks_ms()
-
-            self.handle_sensors()
 
             if power.seconds_after_power_off > 0:
                 if self.azim.parking_position is not None:
@@ -111,6 +111,8 @@ class Rotator():
                 # self.azim.set_dir(-self.azim.direction)
             else:
                 self.azim.go()
+                
+            sleep_ms(300)
 
             if abs(self.elev.angle_counter - self.elev.angle_now) > BREAK_ANGLE:
                 #print(f'self.elev: {self.elev.direction} {self.elev.angle_counter} - {self.elev.angle_now} > {BREAK_ANGLE}°', self.elev.info())
@@ -123,57 +125,66 @@ class Rotator():
     #         if tmp > 0:
     #             self.dt_handle_motors = tmp
 
-            while self.is_handle_motors:
-                self.is_handle_motors = False
+#             while self.is_handle_motors:
+#                 self.is_handle_motors = False
 
             tmp = ticks_diff(ticks_ms(), t)
             if tmp > 0:
                 self.dt_handle_motors = tmp
+
+    # --- Метод, що виконується в основному циклі (Has GIL) ---
+    def _timer_callback(self, timer):
+        try:
+            self.handle_sensors()
+            #print(self.sensors.info())
+            
+            if 0:
+                sleep_ms(300)
+                self.handle_motors()
+                
+            sleep_ms(1)
+            
         except KeyboardInterrupt as e:
-            print(e, 'handle_motors()')
+            print_exception(e)
+            self.timer_deinit()
             raise e
 
+    # --- Метод, що виконується в контексті переривання (ISR/No GIL) ---
     #@micropython.native
-    def __handle_motors(self, timer):
+    def __timer_callback(self, timer):
         try:
-            self.handle_motors()
-        except KeyboardInterrupt as e:
-            print(e, 'handle_motors()')
+            schedule(self._timer_callback, timer)
+            sleep_ms(1)
+        except BaseException as e:
+            print_exception(e)
             raise e
 
 #     #@micropython.native
-#     def __timer_motors(self, timer):
-#         self.handle_motors()
-#         if self.rotator_period > self.dt_handle_motors:
-#             t = self.rotator_period - self.dt_handle_motors
-#         else:
-#             t = self.rotator_period
-#         self.timer.init(mode=Timer.ONE_SHOT, period=t, callback=self.__timer_motors)
-
-    #@micropython.native
-    def __thread_motors(self):
-        while self.is_thread > 0:
-            if ticks_diff(t := ticks_ms(), self.thread_ms) >= self.rotator_period:
-                self.thread_ms = t
-                self.handle_motors()
-            sleep_ms(10)
-        self.is_thread = -1
-        #print('self.is_thread', self.is_thread)
-
-    def start_thread(self):
-        if self.timer is None:
-            if self.is_thread <= 0:
-                self.is_thread = 1
-                #print('self.is_thread', self.is_thread)
-                start_new_thread(self.__thread_motors, ())
-
-    def stop_thread(self):
-        if self.is_thread > 0:
-            self.is_thread = 0
-            #print('self.is_thread', self.is_thread)
-            while self.is_thread == 0:
-                sleep_ms(20)
-            print('stop_thread(), self.is_thread', self.is_thread)
+#     def __thread_motors(self):
+#         while self.is_thread > 0:
+#             if ticks_diff(t := ticks_ms(), self.thread_ms) >= self.rotator_period:
+#                 self.thread_ms = t
+#                 self.handle_motors(None)
+#             sleep_ms(10)
+#         print('self.is_thread', self.is_thread)
+#         self.is_thread = -1
+# 
+#     def start_thread(self):
+#         if self.timer is None:
+#             if self.is_thread <= 0:
+#                 print('self.is_thread', self.is_thread)
+#                 print('1start_new_thread(), self.is_thread', self.is_thread)
+#                 start_new_thread(self.__thread_motors, ())
+#                 print('2start_new_thread(), self.is_thread', self.is_thread)
+#                 self.is_thread = 1
+# 
+#     def stop_thread(self):
+#         if self.is_thread > 0:
+#             self.is_thread = 0
+#             #print('self.is_thread', self.is_thread)
+#             while self.is_thread == 0:
+#                 sleep_ms(20)
+#             print('stop_thread(), self.is_thread', self.is_thread)
 
     def go(self):
         self.azim.go()
@@ -256,3 +267,8 @@ class Rotator():
     @rps_low.setter
     def rps_low(self, rps):
         self.azim.rps_low, self.elev.rps_low = rps
+
+    @property
+    #@micropython.native
+    def raw_angles(self):
+        return self.sensors.raw_yaw, self.sensors.raw_pitch
