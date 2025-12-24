@@ -7,7 +7,7 @@ from network import WLAN, STA_IF, AP_IF
 from errno import EAGAIN, ETIMEDOUT
 from socket import socket, AF_INET, SOCK_DGRAM, SOL_SOCKET, SO_REUSEADDR, IPPROTO_IP, IP_ADD_MEMBERSHIP
 
-PRINT = False
+PRINT = True  # False
 
 SLEEP_RANDOM_MS = 300 + 1
 
@@ -60,6 +60,7 @@ class UdpMulticastServer(object):
                 self.skt.setsockopt(IPPROTO_IP, IP_ADD_MEMBERSHIP, pack(">4s4s", inet_aton(self.multicast_ip), inet_aton(self.server_ip)))  # join to the multicast address
                 self.skt.bind((self.multicast_ip, self.multicast_port))
                 self.skt.settimeout(self.timeout)
+                PRINT and print('UdpMulticastServer:bind:', self.multicast_ip, self.multicast_port)
         except Exception as e:
             print_exception(e)
             self.skt = None
@@ -73,6 +74,7 @@ class UdpMulticastServer(object):
 
     def execute(self):
         # Call it in the main loop
+        # print(self.host, self.server_ip)
         if self.host != self.server_ip:
             self.end()
 
