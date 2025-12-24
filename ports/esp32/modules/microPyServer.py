@@ -7,7 +7,7 @@ import network
 from errno import EAGAIN
 from io import StringIO
 from re import compile
-from time import time
+from time import time, sleep_ms
 
 from skt import open_server_socket
 from uri import URI_percent_decoding
@@ -115,12 +115,14 @@ class MicroPyServer(object):
         if self._socket is not None:
             print("{}:{} MicroPyServer close socket".format(self._host, self.port), self._socket.fileno())
             self._socket.close()
+            sleep_ms(500)
             self._socket = None
 
     def connect_close(self):
         if self._skt is not None:
             #print("{}:{} MicroPyServer close connection".format(self._host, self.port), self._skt.fileno())
             self._skt.close()
+            sleep_ms(500)
         self._skt = None
         self.state = 0
         self.empty_bufs()
