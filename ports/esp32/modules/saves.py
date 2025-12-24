@@ -17,10 +17,20 @@ def save_config(owl):
 def save_config_offset(owl):
     try:
         with open("./config_offset.py", "w") as f:
-            f.write("AZIM_OFFSET = {}\n".format(dumps(owl.azim.mover.offset)))
-            # f.write("AZIM_OFFSET = 0.0\n")
-            f.write("ELEV_OFFSET = {}\n".format(dumps(owl.elev.mover.offset)))
-            f.write("ROLL_OFFSET = {}\n".format(dumps(owl.sensors.offset_roll)))
+#             #f.write("AZIM_OFFSET = {}\n".format(dumps(owl.azim.mover.offset)))
+#             f.write("AZIM_OFFSET = 0\n")
+#             f.write("ELEV_OFFSET = {}\n".format(dumps(owl.elev.mover.offset)))
+#             f.write("ROLL_OFFSET = {}\n".format(dumps(owl.sensors.offset_roll)))
+            
+            #f.write("AZIM_OFFSET = {}\n".format(dumps(-round(owl.sensors.raw_yaw, 2))))
+            f.write("AZIM_OFFSET = 0\n")
+            f.write("ELEV_OFFSET = {}\n".format(dumps(-round(owl.sensors.raw_pitch, 2))))
+            f.write("ROLL_OFFSET = {}\n".format(dumps(-round(owl.sensors.raw_roll, 2))))
+            
+            owl.sensors.offset_yaw = -owl.sensors.raw_yaw
+            owl.sensors.offset_pitch = -owl.sensors.raw_pitch
+            owl.sensors.offset_roll = -owl.sensors.raw_roll
+            
             f.close()
     except Exception as e:
         print('Error writing config_offset.py:', e)
