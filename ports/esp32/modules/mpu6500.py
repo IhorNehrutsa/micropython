@@ -24,19 +24,11 @@
 __version__ = "0.3.0"
 
 # pylint: disable=import-error
-from gc import collect
-
-collect()
+from sys import print_exception
 from ustruct import unpack, pack_into
-
-collect()
 from utime import sleep_ms
-
-collect()
-#from machine import I2C, Pin
-#collect()
-#from micropython import const
-#collect()
+from machine import I2C
+from micropython import const
 # pylint: enable=import-error
 
 _GYRO_CONFIG = const(0x1b)
@@ -109,6 +101,8 @@ class MPU6500:
         gyro_sf=SF_RAD_S,
         gyro_offset=(0, 0, 0)
         ):
+
+        assert isinstance(i2c, I2C)
         self.i2c = i2c
         self.address = address
 
@@ -145,14 +139,13 @@ class MPU6500:
         # X, Y, Z radians per second as floats.
         so = self._gyro_so
         sf = self._gyro_sf
-        ox, oy, oz = self._gyro_offset
 
         xyz = self._register_three_shorts(_GYRO_XOUT_H)
         xyz = [value / so * sf for value in xyz]
 
-        xyz[0] -= ox
-        xyz[1] -= oy
-        xyz[2] -= oz
+        xyz[0] -= self._gyro_offset[0]
+        xyz[1] -= self._gyro_offset[1]
+        xyz[2] -= self._gyro_offset[2]
 
         return tuple(xyz)
 
@@ -190,7 +183,7 @@ class MPU6500:
                 self.buf_prev[:] = buf[:]
             self.error = False 
         except OSError as e:
-#             print('e=', e)
+            print_exception(e)
 #             print('len(buf)=', len(buf), buf)
 #             buf = b'\x00\x00\x00\x00\x00\x00'
             #print(buf, self.buf_prev)
@@ -204,7 +197,7 @@ class MPU6500:
             self.i2c.writeto_mem(address, register, buf)
             self.error = False
         except OSError as e:
-#             print('e=', e)
+            print_exception(e)
 #             print('len(buf)=', len(buf), buf)
 #             buf = b'\x00\x00\x00\x00\x00\x00'
             self.error = True 
@@ -264,4 +257,5 @@ class MPU6500:
         return self
 
     def __exit__(self, exception_type, exception_value, traceback):
+        print("MPU6500:", exception_type, exception_value, traceback)
         pass
