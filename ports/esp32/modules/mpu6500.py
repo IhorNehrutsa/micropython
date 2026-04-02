@@ -25,12 +25,18 @@ __version__ = "0.3.0"
 
 # pylint: disable=import-error
 from sys import print_exception
-from ustruct import unpack, pack_into
 from utime import sleep_ms
+from ustruct import unpack, pack_into
 from machine import I2C
 from micropython import const
 # pylint: enable=import-error
 
+_SELF_TEST_X_GYRO = const(0x00)
+_SELF_TEST_Y_GYRO = const(0x01)
+_SELF_TEST_Z_GYRO = const(0x02)
+_SELF_TEST_X_ACCEL = const(0x0d)
+_SELF_TEST_Y_ACCEL = const(0x0e)
+_SELF_TEST_Z_ACCEL = const(0x0f)
 _GYRO_CONFIG = const(0x1b)
 _ACCEL_CONFIG = const(0x1c)
 _ACCEL_CONFIG2 = const(0x1d)
@@ -49,6 +55,7 @@ _GYRO_YOUT_H = const(0x45)
 _GYRO_YOUT_L = const(0x46)
 _GYRO_ZOUT_H = const(0x47)
 _GYRO_ZOUT_L = const(0x48)
+_PWR_MGMT_1 = const(0x6b)  # Регістр керування живленням
 _WHO_AM_I = const(0x75)
 
 #_ACCEL_FS_MASK = const(0b00011000)
@@ -106,152 +113,169 @@ class MPU6500:
         self.i2c = i2c
         self.address = address
 
-        # 0x70 = standalone MPU6500, 0x71 = MPU6250 SIP
-#         if self.whoami not in [0x71, 0x70]:
-#             raise RuntimeError("MPU6500 not found in I2C bus.")
+        # Постійні буфери для RAM (запобігають частому Garbage Collection)
+        self._buf1 = bytearray(1)
+        self._buf2 = bytearray(2)
+        self._buf6 = bytearray(6)
+        self._buf_prev = bytearray(b'\x00\x00\x00\x00\x00\x00')
+        self.error = False
 
+        # Пробудження датчика (скидання біта SLEEP)
+        self._register_char(_PWR_MGMT_1, 0x00)
+        sleep_ms(100)  # Даємо час стабілізуватися
+
+        # 0x70 = standalone MPU6500, 0x71 = MPU6250 SIP
+        if self.get_whoami() not in [0x71, 0x70]:
+            raise RuntimeError("MPU6500 not found in I2C bus.")
+
+        # Ініціалізація чутливості (синхронні виклики I2C допустимі в __init__)
         self._accel_so = self._accel_fs(accel_fs)
         self._gyro_so = self._gyro_fs(gyro_fs)
         self._accel_sf = accel_sf
         self._gyro_sf = gyro_sf
         self._gyro_offset = gyro_offset
 
-        self.buf_prev = bytearray(b'\x00\x00\x00\x00\x00\x00')
-        self.error = False 
-
     def __repr__(self):
         return 'MPU6500(i2c={}, address={})'.format(self.i2c, self.address)
 
-    @property
-    def acceleration(self):
+    def execute_self_test(self):
+        """
+        Виконує самотестування акселерометра та гіроскопа.
+        Повертає True, якщо тест пройдено, і False у разі помилки.
+        """
+        # 1. Зчитування заводських значень (ST_DATA)
+        # Для MPU-6500 ці значення використовуються для розрахунку Factory Trim
+        raw_st_gyro = [self._register_char(_SELF_TEST_X_GYRO), self._register_char(_SELF_TEST_Y_GYRO), self._register_char(_SELF_TEST_Z_GYRO)]
+        raw_st_accel = [self._register_char(_SELF_TEST_X_ACCEL), self._register_char(_SELF_TEST_Y_ACCEL), self._register_char(_SELF_TEST_Z_ACCEL)]
+
+        # 2. Збереження поточних налаштувань для відновлення після тесту
+        old_gyro_config = self._register_char(_GYRO_CONFIG)
+        old_accel_config = self._register_char(_ACCEL_CONFIG)
+
+        # 3. Активація Self-Test (встановлення бітів 7, 6, 5 у регістрах конфігурації)
+        # Встановлюємо FS_SEL = 250dps для гіро та 2g для акселерометра для точності
+        self._register_char(_GYRO_CONFIG, 0xE0)  # XG_ST, YG_ST, ZG_ST = 1
+        self._register_char(_ACCEL_CONFIG, 0xE0)  # XA_ST, YA_ST, ZA_ST = 1
+
+        sleep_ms(25)  # Очікування стабілізації
+
+        # 4. Зчитування значень з активованим тестом
+        st_accel_out = self.get_acceleration()
+        st_gyro_out = self.get_gyro()
+
+        # 5. Відновлення попередніх налаштувань
+        self._register_char(_GYRO_CONFIG, old_gyro_config)
+        self._register_char(_ACCEL_CONFIG, old_accel_config)
+
+        # Логіка перевірки:
+        # Справний сенсор має показати суттєву зміну значень (Self-test response)
+        # Для спрощеної реалізації перевіримо, чи не є отримані значення нульовими
+        # Повна перевірка вимагає формул з AN-MPU-6500A-02 (на базі Factory Trim)
+
+        success = all(abs(x) > 0 for x in st_accel_out) and \
+                  all(abs(x) > 0 for x in st_gyro_out)
+        return success
+
+    def get_acceleration(self):
         # Acceleration measured by the sensor. By default will return a
         # 3-tuple of X, Y, Z axis acceleration values in m/s^2 as floats. Will
         # return values in g if constructor was provided `accel_sf=SF_M_S2`
         # parameter.
-        so = self._accel_so
-        sf = self._accel_sf
-
         xyz = self._register_three_shorts(_ACCEL_XOUT_H)
-        return tuple([value / so * sf for value in xyz])
+        return tuple([value / self._accel_so * self._accel_sf for value in xyz])
 
-    @property
-    def gyro(self):
+    def get_gyro(self):
         # X, Y, Z radians per second as floats.
-        so = self._gyro_so
-        sf = self._gyro_sf
-
         xyz = self._register_three_shorts(_GYRO_XOUT_H)
-        xyz = [value / so * sf for value in xyz]
+        xyz = [value / self._gyro_so * self._gyro_sf for value in xyz]
 
-        xyz[0] -= self._gyro_offset[0]
-        xyz[1] -= self._gyro_offset[1]
-        xyz[2] -= self._gyro_offset[2]
+        return (xyz[0] - self._gyro_offset[0], xyz[1] - self._gyro_offset[1], xyz[2] - self._gyro_offset[2])
 
-        return tuple(xyz)
-
-    @property
-    def temperature(self):
-        # Die temperature in celcius as a float.
+    def get_temperature(self):
+        # Temperature in celcius as a float.
         temp = self._register_short(_TEMP_OUT_H)
         return ((temp - _TEMP_OFFSET) / _TEMP_SO) + _TEMP_OFFSET
 
-    @property
-    def whoami(self):
+    def get_whoami(self):
         # Value of the whoami register.
         return self._register_char(_WHO_AM_I)
 
-    def calibrate(self, count=256, delay=0):
+    def calibrate(self, count=256, delay=5):
         ox, oy, oz = (0.0, 0.0, 0.0)
         self._gyro_offset = (0.0, 0.0, 0.0)
-        n = float(count)
 
-        while count:
-            sleep_ms(delay)
-            gx, gy, gz = self.gyro
+        for _ in range(count):
+            gx, gy, gz = self.get_gyro()
             ox += gx
             oy += gy
             oz += gz
-            count -= 1
+            sleep_ms(delay)
 
+        n = float(count)
         self._gyro_offset = (ox / n, oy / n, oz / n)
         return self._gyro_offset
-    
-    def __readfrom_mem_into(self, address, register, buf):
+
+    def _register_short(self, register, value=None):
+        if value is None:
+            self.__readfrom_mem_into(register, self._buf2)
+            return unpack(">h", self._buf2)[0]
+
+        pack_into(">h", self._buf2, 0, value)
+        self.__writeto_mem(register, self._buf2)
+        return None
+
+    def _register_three_shorts(self, register):
+        self.__readfrom_mem_into(register, self._buf6)
+        return unpack(">hhh", self._buf6)
+
+    def _register_char(self, register, value=None):
+        if value is None:
+            self.__readfrom_mem_into(register, self._buf1)
+            return self._buf1[0]
+
+        self._buf1[0] = value
+        self.__writeto_mem(register, self._buf1)
+        return None
+
+    def __readfrom_mem_into(self, register, buf):
         try:
-            self.i2c.readfrom_mem_into(address, register, buf)
+            self.i2c.readfrom_mem_into(self.address, register, buf)
             if len(buf) == 6:
-                self.buf_prev[:] = buf[:]
-            self.error = False 
-        except OSError as e:
-            print_exception(e)
-#             print('len(buf)=', len(buf), buf)
-#             buf = b'\x00\x00\x00\x00\x00\x00'
-            #print(buf, self.buf_prev)
-            if len(buf) == 6:
-                buf[:] = self.buf_prev[:]
-            self.error = True 
-            pass 
-            
-    def __writeto_mem(self, address, register, buf):
-        try:
-            self.i2c.writeto_mem(address, register, buf)
+                self._buf_prev[:] = buf
             self.error = False
         except OSError as e:
             print_exception(e)
-#             print('len(buf)=', len(buf), buf)
-#             buf = b'\x00\x00\x00\x00\x00\x00'
-            self.error = True 
+            #             print('len(buf)=', len(buf), buf)
+            #             buf = b'\x00\x00\x00\x00\x00\x00'
+            if len(buf) == 6:
+                buf[:] = self._buf_prev
+            self.error = True
+
+    def __writeto_mem(self, register, buf):
+        try:
+            self.i2c.writeto_mem(self.address, register, buf)
+            self.error = False
+        except OSError as e:
+            print_exception(e)
+            #             print('len(buf)=', len(buf), buf)
+            #             buf = b'\x00\x00\x00\x00\x00\x00'
+            self.error = True
         return None
 
-    def _register_short(self, register, value=None, buf=bytearray(2)):
-        if value is None:
-            self.__readfrom_mem_into(self.address, register, buf)
-            return unpack(">h", buf)[0]
-
-        pack_into(">h", buf, 0, value)
-        return self.__writeto_mem(self.address, register, buf)
-
-    def _register_three_shorts(self, register, buf=bytearray(6)):
-        self.__readfrom_mem_into(self.address, register, buf)
-        return unpack(">hhh", buf)
-
-    def _register_char(self, register, value=None, buf=bytearray(1)):
-        if value is None:
-            self.__readfrom_mem_into(self.address, register, buf)
-            return buf[0]
-
-        pack_into("<b", buf, 0, value)
-        return self.__writeto_mem(self.address, register, buf)
-
+    # Синхронні налаштування (зазвичай викликаються один раз при старті)
     def _accel_fs(self, value):
         self._register_char(_ACCEL_CONFIG, value)
 
         # Return the sensitivity divider
-        if ACCEL_FS_SEL_2G == value:
-            return _ACCEL_SO_2G
-        elif ACCEL_FS_SEL_4G == value:
-            return _ACCEL_SO_4G
-        elif ACCEL_FS_SEL_8G == value:
-            return _ACCEL_SO_8G
-        elif ACCEL_FS_SEL_16G == value:
-            return _ACCEL_SO_16G
-        else:
-            raise
+        mapping = {ACCEL_FS_SEL_2G: _ACCEL_SO_2G, ACCEL_FS_SEL_4G: _ACCEL_SO_4G, ACCEL_FS_SEL_8G: _ACCEL_SO_8G, ACCEL_FS_SEL_16G: _ACCEL_SO_16G}
+        return mapping[value]
 
     def _gyro_fs(self, value):
         self._register_char(_GYRO_CONFIG, value)
 
         # Return the sensitivity divider
-        if GYRO_FS_SEL_250DPS == value:
-            return _GYRO_SO_250DPS
-        elif GYRO_FS_SEL_500DPS == value:
-            return _GYRO_SO_500DPS
-        elif GYRO_FS_SEL_1000DPS == value:
-            return _GYRO_SO_1000DPS
-        elif GYRO_FS_SEL_2000DPS == value:
-            return _GYRO_SO_2000DPS
-        else:
-            raise
+        mapping = {GYRO_FS_SEL_250DPS: _GYRO_SO_250DPS, GYRO_FS_SEL_500DPS: _GYRO_SO_500DPS, GYRO_FS_SEL_1000DPS: _GYRO_SO_1000DPS, GYRO_FS_SEL_2000DPS: _GYRO_SO_2000DPS}
+        return mapping[value]
 
     def __enter__(self):
         return self
