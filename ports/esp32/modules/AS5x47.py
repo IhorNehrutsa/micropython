@@ -1,5 +1,5 @@
 from micropython import const
-from uctypes import BF_POS, BF_LEN, BFUINT16, BIG_ENDIAN, struct, addressof #, bytes_at, sizeof
+from uctypes import BF_POS, BF_LEN, BFUINT16, BIG_ENDIAN, struct, addressof
 from utime import sleep_us
 from machine import SPI, Pin
 
@@ -7,15 +7,43 @@ from machine import SPI, Pin
 __MSB_mask = const(0x4000)  # for lower 15 bits
 __to_angle = 360 / 0x4000
 
-#@micropython.native
-def is_even(data, msb_mask):
+# Таблиця парності для 4-бітних нібблів (0-15)
+# 0: парне(0), 1: непарне(1), 2: непарне(1), 3: парне(0) і т.д.
+_PARITY_LOOKUP = b'\x00\x01\x01\x00\x01\x00\x00\x01\x01\x00\x00\x01\x00\x01\x01\x00'
+
+
+#@micropython.viper
+@micropython.native
+def is_even2(data):
+    # Працюємо з 16-бітним значенням (адреса + R/W)
+    # XOR між усіма 4-бітними частинами числа
+    data &= 0x7FFF
+    p = data ^ (data >> 8)
+    p = p ^ (p >> 4)
+    # Повертаємо 0 якщо парне, 1 якщо непарне (для AS5x47 потрібна EVEN parity)
+    return _PARITY_LOOKUP[p & 0x0F]
+
+
+@micropython.native
+def is_even1(data):
     # Calc parity bit
     even = False
+    msb_mask = __MSB_mask
     while msb_mask:
         if data & msb_mask:
             even = not even
         msb_mask >>= 1
     return 1 if even else 0
+
+
+@micropython.native
+def is_even(data):
+    data &= 0x7FFF
+    data ^= data >> 8
+    data ^= data >> 4
+    data ^= data >> 2
+    data ^= data >> 1
+    return data & 1
 
 
 # ----------------------------------------------------------------------
@@ -170,25 +198,25 @@ class AS5x47():
     # spi = SPI(HSPI_ID, sck=Pin(HSPI_sck), mosi=Pin(HSPI_mosi), miso=Pin(HSPI_miso), baudrate=10_000_000, polarity=0, phase=1, bits=16, firstbit=SPI.MSB)
     # cs = Pin(esp32_.HSPI_cs1, Pin.OUT, value=1)
 
-
+    # Константи помилок
     NO_error = 0
     EF_error = 1
     PARD_error = 2
     DATA_error = 3
-    
-    
+
     def __init__(self, spi, spi_baudrate, cs):
         assert isinstance(spi, SPI)
         assert isinstance(cs, Pin)
-        
+
         self.spi = spi
+        # Розрахунок затримки
         self.tclk_2_us = 1_000_000 // (spi_baudrate * 2)  # tH = tclk / 2 ns # Time between last falling edge of CLK and rising edge of cs
-#         if self.tclk_2_us == 0:
-#             self.tclk_2_us = 1
-        self.tclk_2_us += 10
-        print('AS5x47:tclk/2 us:', self.tclk_2_us)
+        if self.tclk_2_us == 0:
+            self.tclk_2_us = 1
+        # self.tclk_2_us += 10
         self.cs = cs  # active is low
 
+        # Буфери
         self._write_command = bytearray(b'\xC0\x00')
         self._received_data = bytearray(b'\x00\x00')
         self.received_frame = struct(addressof(self._received_data), Read_Data_Frame_struct, BIG_ENDIAN)
@@ -196,24 +224,31 @@ class AS5x47():
         self.command_frame = struct(addressof(self._command_buff), Command_Frame_struct, BIG_ENDIAN)
         self._data_buff = bytearray(b'\x00\x00')
         self.data_frame = struct(addressof(self._data_buff), Write_Data_Frame_struct, BIG_ENDIAN)
-        
-        self.error = self.NO_error
 
-        print('AS5x47:ERRFL:', self.read_ERRFL())
-        print('AS5x47:DIAAGC:', self.read_DIAAGC())
+        self.error = self.NO_error
         self._angle14 = 0
-        self.readAngleCom() #  set _angle14 !!!
+        self._angle14_prev = 0
+        self._angle_major = 0
+
+        self.init_sensor()
+
+    def init_sensor(self):
+        """Асинхронна ініціалізація (замість друку в __init__)"""
+        err = self.read_ERRFL()
+        diag = self.read_DIAAGC()
+        print('AS5x47:ERRFL:', err)
+        print('AS5x47:DIAAGC:', diag)
+
+        # Початкове зчитування кута
         self.readAngleCom()
         self.readAngleCom()
-        
+        self.readAngleCom()
         self._angle14_prev = self._angle14
         if self._angle14_prev >= 0x2000:
             self._angle14_prev = 0
 
-        self._angle_major = 0
-        
     # ------------------
-    #@micropython.native
+    @micropython.native
     def _readAngleInfinity(self, readAngleFunc):
         readAngleFunc()
         if not self.error:
@@ -228,7 +263,6 @@ class AS5x47():
     def __repr__(self):
         return 'AS5x47(spi={}, cs={})'.format(self.spi, self.cs)
 
-    #@micropython.viper
     def writeData(self, command, value):
         # Send command
         self.cs(0)
@@ -243,14 +277,13 @@ class AS5x47():
         self.cs(1)
 
     # after every spi.write_readinto()
-    #@micropython.native
     def checkReceivedFrame(self, where=''):
-        if self.received_frame.EF: 
+        if self.received_frame.EF:
             print('received_frame.EF on 0x%X' % self.command_frame.ADDR)
             self.error = self.EF_error
             #raise
         #el
-        if self.received_frame.PARD != is_even(self.received_frame.DATA, __MSB_mask):
+        if self.received_frame.PARD != is_even(self.received_frame.DATA):
             print('received_frame.PARD != is_even on 0x%X' % self.command_frame.ADDR)
             print(where, self.EF_error, self.received_frame.PARD, self.received_frame.DATA, self._received_data)
             self.error = self.PARD_error
@@ -262,9 +295,8 @@ class AS5x47():
             #raise
         else:
             self.error = self.NO_error
-        #print("checkReceivedFrame()", where)            
+        #print("checkReceivedFrame()", where)
 
-    #@micropython.viper
     def readData(self, command):
         # Send Read Command
         self._write_command = command  # bytes_at(addressof(command), sizeof(command))
@@ -278,10 +310,10 @@ class AS5x47():
         self.spi.write_readinto(self._write_command, self._received_data)
         sleep_us(self.tclk_2_us)
         self.cs(1)
-        
+
         self.checkReceivedFrame("readData")
 
-    #@micropython.viper
+    @micropython.native
     def readDataAgain(self):
         # Send Read Command while receiving data
         self.cs(0)
@@ -291,94 +323,89 @@ class AS5x47():
 
         self.checkReceivedFrame("readDataAgain")
 
-    #@micropython.viper
     def receivedFrameStruct(self, received_frame):
         return struct(addressof(received_frame), Read_Data_Frame_struct, BIG_ENDIAN)
 
-    #@micropython.native
+    @micropython.native
     def readRegister(self, registerAddress):
         self.command_frame.ADDR = registerAddress
         self.command_frame.R_W = READ
-        self.command_frame.PARC = is_even(int.from_bytes(self._command_buff, byteorder="big"), __MSB_mask)
-
+        # Розрахунок парності (синхронна операція)
+        self.command_frame.PARC = is_even(int.from_bytes(self._command_buff, byteorder="big"))
         self.readData(self.command_frame)
 
-#     #@micropython.viper
 #     def readRegisterAgain(self):
 #         self.readDataAgain()
 
-    #@micropython.native
+    @micropython.native
     def writeRegister(self, registerAddress, registerValue):
         self.command_frame.ADDR = registerAddress
         self.command_frame.R_W = WRITE
-        self.command_frame.PARC = is_even(int.from_bytes(self._command_buff, byteorder="big"), __MSB_mask)
+        self.command_frame.PARC = is_even(int.from_bytes(self._command_buff, byteorder="big"))
 
         self.data_frame.DATA = registerValue
         self.data_frame.LOW = 0
-        self.data_frame.PARD = is_even(int.from_bytes(self._data_buff, byteorder="big"), __MSB_mask)
+        self.data_frame.PARD = is_even(int.from_bytes(self._data_buff, byteorder="big"))
 
         self.writeData(self.command_frame, self.data_frame)
 
 #     # ------------------
-#     #@micropython.viper
+#
 #     def readAngle(self):
 #         self.readRegister(ANGLEUNC)
 #         if not self.error:
 #             self._angle14 = struct(addressof(self._received_data), ANGLEUNC_struct, BIG_ENDIAN).CORDICANG
-# 
-#     #@micropython.viper
+#
+#
 #     def readAngleAgain(self):
 #         self.readDataAgain()
 #         if not self.error:
 #             self._angle14 = struct(addressof(self._received_data), ANGLEUNC_struct, BIG_ENDIAN).CORDICANG
-# 
-#     #@micropython.viper
+#
+#
 #     def readAngleInfinity(self):
 #         return self._readAngleInfinity(self.readAngleAgain)
- 
+
     # ------------------
-    #@micropython.viper
+    @micropython.native
     def readAngleCom(self):
         self.readRegister(ANGLECOM)
         if not self.error:
             self._angle14 = struct(addressof(self._received_data), ANGLECOM_struct, BIG_ENDIAN).DAECANG
         return self._angle14
 
-    #@micropython.viper
+    @micropython.native
     def readAngleComAgain(self):
         self.readDataAgain()
         if not self.error:
             self._angle14 = struct(addressof(self._received_data), ANGLECOM_struct, BIG_ENDIAN).DAECANG
         return self._angle14
 
-    #@micropython.viper
+    @micropython.native
     def readAngleComInfinity(self):
         return self._readAngleInfinity(self.readAngleComAgain)
 
     # ------------------
-#     #@micropython.viper
 #     def writeSettings1(self, value):
 #         self.writeRegister(SETTINGS1, value)
-# 
-#     #@micropython.viper
+
 #     def writeSettings2(self, value):
 #         self.writeRegister(SETTINGS2, value)
-# 
-#     #@micropython.viper
+
 #     def writeZeroPosition(self, zposm, zposl):
 #         self.writeRegister(ZPOSM, zposm)
 #         self.writeRegister(ZPOSL, zposl)
-
 
     def read_DIAAGC(self):
         self.readRegister(DIAAGC)
         if not self.error:
             s = struct(addressof(self._received_data), DIAAGC_struct, BIG_ENDIAN)
-            return {'MAGL':s.MAGL, 'MAGH':s.MAGH, 'COF':s.COF, 'LF':s.LF, 'AGC':s.AGC}
+            return {'MAGL': s.MAGL, 'MAGH': s.MAGH, 'COF': s.COF, 'LF': s.LF, 'AGC': s.AGC}
+        return None
 
     def read_ERRFL(self):
         self.readRegister(ERRFL)
-        
         if not self.error:
             s = struct(addressof(self._received_data), ERRFL_struct, BIG_ENDIAN)
-            return {'PARERR':s.PARERR, 'INVCOMM':s.INVCOMM, 'FRERR':s.FRERR}
+            return {'PARERR': s.PARERR, 'INVCOMM': s.INVCOMM, 'FRERR': s.FRERR}
+        return None
