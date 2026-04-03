@@ -18,12 +18,12 @@ class StepperAngle(Stepper, StepsPerRev):
     def __repr__(self):
         return f"StepperAngle(max_limit={self.angle_max_limit}, min_limit={self.angle_min_limit}, steps_per_rev={self.steps_per_rev}):" + super().__repr__()
 
-    #@micropython.native
+
     @property
     def angle_now(self):
         return self.steps_to_angle(self.steps_now)
 
-    #@micropython.native
+
     @property
     def angle_target(self):
         # print(f'{self.name} StepperAngle():angle_target.property')
