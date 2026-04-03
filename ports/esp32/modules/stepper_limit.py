@@ -30,24 +30,24 @@ class StepperLimit(StepsPerRev):
 #     @property
 #     def reverse_direction(self):
 #         return self._reverse_direction
-# 
-#     #@micropython.native
+#
+#
 #     @reverse_direction.setter
 #     def reverse_direction(self, reverse_direction:int):
 #         self._reverse_direction = 1 if bool(reverse_direction) else 0
 
     # -----------------------------------------------------------------------
-    #@micropython.native
+
     @property
     def steps_now(self) -> int:
         return self._steps_now
 
-    #@micropython.native
+
     @property
     def steps_target(self) -> int:
         return self._steps_target
 
-    #@micropython.native
+
     @steps_target.setter
     def steps_target(self, steps_target):
         # Set the target position that will be executed in the main loop
@@ -65,7 +65,7 @@ class StepperLimit(StepsPerRev):
     def direction(self) -> int:
         return self._direction
 
-    #@micropython.native
+
     @direction.setter
     def direction(self, delta:int):
         if delta > 0:
@@ -78,6 +78,6 @@ class StepperLimit(StepsPerRev):
             self._direction = 0
         #print(f'{self.name} Set direction:delta={delta} to self._direction={self._direction} with self._reverse_direction={self._reverse_direction} self.pin_dir()={self.pin_dir()}')
 
-    #@micropython.native
+
     def is_ready(self) -> bool:
         return self._steps_target == self._steps_now

@@ -4,7 +4,7 @@ from gc import collect, mem_free
 from sys import print_exception
 from ujson import dumps, loads
 from network import WLAN, AP_IF, STA_IF
-import WiFi
+#import WiFi
 
 from saves import *
 

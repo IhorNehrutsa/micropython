@@ -37,7 +37,7 @@ class Stepper():
     def reverse_direction(self):
         return self._reverse_direction
 
-    #@micropython.native
+
     @reverse_direction.setter
     def reverse_direction(self, reverse_direction:int):
         self._reverse_direction = 1 if bool(reverse_direction) else 0
@@ -50,30 +50,30 @@ class Stepper():
         self.us_step_period = round(1_000_000 / self._freq)
         #print(f'Stepper.stepper_set_freq(): self._freq={self._freq}, self.us_step_period={self.us_step_period}')
 
-    #@micropython.native
+
     @property
     def freq(self):
         #print('Stepper.freq.property')
         return self._freq
 
-    #@micropython.native
+
     @freq.setter
     def freq(self, freq):
         #print('Stepper.freq.setter')
         self.stepper_set_freq(freq)
 
     # -----------------------------------------------------------------------
-    #@micropython.native
+
     @property
     def steps_now(self) -> int:
         return self._steps_now
 
-    #@micropython.native
+
     @property
     def steps_target(self) -> int:
         return self._steps_target
 
-    #@micropython.native
+
     @steps_target.setter
     def steps_target(self, steps_target):
         # Set the target position that will be executed in the main loop
@@ -91,7 +91,7 @@ class Stepper():
     def direction(self) -> int:
         return self._direction
 
-    #@micropython.native
+
     @direction.setter
     def direction(self, delta:int):
         if delta > 0:
@@ -113,7 +113,7 @@ class Stepper():
     def stop_pulses(self):
         self._direction = 0
     # -----------------------------------------------------------------------
-#     #@micropython.native
+#
 #     def single_step(self, step_pulse_us:int=5): # длительность импульса в мкс: 7.5us при 5us  и  12.5us при 10us
 #         # Execute one step
 #         if self._direction != 0:  # 24.96kHz
@@ -129,7 +129,7 @@ class Stepper():
 #             self.pin_step(1)  # 26.21kHz
 #             self._steps_now += self._direction
 #
-#     #@micropython.native
+#
 #     def run_single_step(self):
 #         # Check the step period and run one step
 #         diff = ticks_diff(t:=ticks_us(), self._us_prev_step)
@@ -145,7 +145,7 @@ class Stepper():
 #             steps -= 1
 #             self.run_single_step()
 
-    ### #@micropython.native # 8.03kHz - мешает прервать по Ctrl-C
+    ###  # 8.03kHz - мешает прервать по Ctrl-C
     def run_steps(self, steps:int):  # 8.03kHz
         steps = round(steps)
         self.direction = steps
@@ -169,6 +169,6 @@ class Stepper():
             self.steps_target = steps_target
         self.run_steps(self._steps_target - self._steps_now)
 
-    #@micropython.native
+
     def is_ready(self) -> bool:
         return self._steps_target == self._steps_now

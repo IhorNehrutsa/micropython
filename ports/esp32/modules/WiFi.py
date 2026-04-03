@@ -15,7 +15,7 @@ from sys import print_exception
 from _thread import start_new_thread
 from machine import Timer
 import network
-import webrepl
+#import webrepl
 
 PRINT = False #  True #  
 
@@ -47,12 +47,12 @@ net_state = NET_STA_IMPORT
 net_time = time()
 
 wlan_ap = network.WLAN(network.AP_IF)
-wlan_ap.active(False)
+# wlan_ap.active(False)
 #wlan_ap.config(pm=wlan_ap.PM_NONE)
 
 wlan_sta = network.WLAN(network.STA_IF)
-wlan_sta.active(True)
-wlan_sta.config(pm=wlan_sta.PM_NONE)
+# wlan_sta.active(True)
+#wlan_sta.config(pm=wlan_sta.PM_NONE)
 
 wlan_status = None
 
@@ -220,7 +220,7 @@ def WiFi_connect(prn=False):
 #                 webrepl.stop()
 #             except:
 #                 pass
-            webrepl.start(password='')
+            #webrepl.start(password='')
             net_state = NET_STA_GOT_IP
             PRINT and print('NET_STA_GOT_IP')
 
