@@ -23,7 +23,7 @@ class Trapezoidal:
         self._last_input = None
         self._last_error = None
 
-    #@micropython.native
+
     def __call__(self, input_):
 
         # compute error terms
@@ -36,7 +36,7 @@ class Trapezoidal:
             output = self.min_output
         if output < 100:
             output = 100
-        
+
         # keep track of state
         self._last_input = input_
         self._last_error = error
@@ -84,7 +84,7 @@ class Trapezoidal:
 #             self.max_output
 #             ))
 #         f.close()
-# 
+#
 #     def read(self):
 #         try:
 #             import config_speed
