@@ -426,7 +426,9 @@ class MksServo:
         status_int = int.from_bytes(tmp[1:2], byteorder="big")
         try:
             #i = int(str(status_enum(status_int)))
-            return int(str(status_enum(status_int)))
+            #print(i, type(i), status_enum(status_int), type(status_enum(status_int)))
+            return status_enum(status_int)
+            #return int(str(status_enum(status_int)))
             #return status_enum.key_from_value(status_int)
         except ValueError:
             raise status_enum_exception(f"No enum member with value {status_int}")

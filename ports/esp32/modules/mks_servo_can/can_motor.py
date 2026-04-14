@@ -96,8 +96,8 @@ def query_motor_status(self):
         can.CanError: If there is an error in sending the CAN message.
     """
     state = self.specialized_state(MksCommands.QUERY_MOTOR_STATUS_COMMAND, MotorStatus(), motor_status_error)
-#     if state == MotorStatus.Fail:
-#         raise motor_status_error("query_motor_status(): Fail")
+    if state == MotorStatus.Fail:
+        raise motor_status_error("query_motor_status(): Fail")
     return state
 
 
