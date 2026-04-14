@@ -85,6 +85,7 @@ void check_esp_err_(esp_err_t code, const char *func, const int line, const char
         if (o_str == NULL) {
             printf("0x%04X in function '%s' at line %d in file '%s'", code, func, line, file);
             printf("pcode:0x%X", code);
+            printf("0x%04X in function '%s' at line %d in file '%s'", code, func, line, file);
             mp_raise_OSError(pcode);
             return;
         }
