@@ -172,8 +172,7 @@ def show_config_speed_page(server, arg, owl):
     collect()
     server.out(s)
 
-
-def show_debug_page(server, arg, owl):
+def eval_debug_data(owl):
     collect()
     try:
         try:
@@ -193,17 +192,24 @@ def show_debug_page(server, arg, owl):
             eval_owl_expression = eval(owl_expression)
             #print(f'eval_owl_expression = >{eval_owl_expression}< {type(eval_owl_expression)}')
 
-        debug_value = dumps(eval_owl_expression)
+        result_value = dumps(eval_owl_expression)
     except Exception as e:
-        debug_value = 'Error:' + dumps(e)
-    #print(f'Value:>{debug_value}< {type(debug_value)}')
+        result_value = 'Error:' + dumps(e)
+    #print(f'Value:>{result_value}< {type(result_value)}')
     collect()
-    owl.s1 = f"Roll:{owl.sensors.roll} Pitch:{owl.sensors.pitch} Yaw:{owl.sensors.yaw} PoE:{power.V_PoE()}V Batt:{power.V_BAT()}V Temp:{power.esp32_Celsius}|{owl.sensors.temperature}°C Mover:{owl.azim.mover.is_ready()} {owl.elev.mover.is_ready()} Mem:{mem_free()}"
+    data = {
+        'debug_info': f"Roll:{owl.sensors.roll} Pitch:{owl.sensors.pitch} Yaw:{owl.sensors.yaw} PoE:{power.V_PoE()}V Batt:{power.V_BAT()}V Temp:{power.esp32_Celsius()}°C, {owl.sensors.temperature}°C Mover:{owl.azim.mover.is_ready()} {owl.elev.mover.is_ready()} Mem:{mem_free()}",
+        'expression': owl.expression,
+        'result_value': result_value
+    }
     collect()
-    s = html_debug.format(owl.s1, owl.expression, debug_value)
+    return data
+        
+def show_debug_page(server, arg, owl):
+    data = eval_debug_data(owl)
+    s = html_debug.format(data['debug_info'], data['expression'], data['result_value'])
     collect()
     server.out(s)
-
 
 #--------------------------------------------------------
 def do_save_config(server, arg, owl):
