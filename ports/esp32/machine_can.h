@@ -92,17 +92,17 @@ typedef enum {
 } error_state_t;
 
 typedef enum {
-    RTR = 1,
-    EXTENDED_ID,
-    FD_F,
-    BRS,
+    FLAG_RTR = 1,
+    FLAG_EXT_ID,
+    FLAG_FD_F,
+    FLAG_BRS,
+    FLAG_UNORDERED,
 } message_flags_t;
 
 typedef enum {
-    CRC = 1,
-    FORM,
-    OVERRUN,
-    ESI,
+    RECV_ERR_FULL = 1,
+    RECV_ERR_OVERRUN,
+    RECV_ERR_ESI,
 } recv_errors_t;
 
 typedef enum {
@@ -132,7 +132,7 @@ typedef struct {
     uint16_t num_bus_off;
     twai_handle_t handle;
     twai_status_info_t status;
-} esp32_can_obj_t;
+} machine_can_obj_t;
 
 extern const mp_obj_type_t machine_can_type;
 

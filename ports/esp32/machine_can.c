@@ -57,12 +57,10 @@
 #define CAN_DEFAULT_BS2 (4)
 #define CAN_MAX_DATA_FRAME          (8)
 
-//static twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
-
-static esp32_can_obj_t *esp32_can_objs[SOC_TWAI_CONTROLLER_NUM] = {};
+static machine_can_obj_t *machine_can_objs[SOC_TWAI_CONTROLLER_NUM] = {};
 
 // INTERNAL Deinitialize can
-void can_deinit(esp32_can_obj_t *self) {
+void can_deinit(machine_can_obj_t *self) {
     if (self->handle) {
         twai_stop_v2(self->handle);
         check_esp_err(twai_driver_uninstall_v2(self->handle));
@@ -77,12 +75,12 @@ void can_deinit(esp32_can_obj_t *self) {
 // This called from Ctrl-D soft reboot
 void machine_can_deinit_all() {
     for (int i = 0; i < SOC_TWAI_CONTROLLER_NUM; i++) {
-        can_deinit(esp32_can_objs[i]);
+        can_deinit(machine_can_objs[i]);
     }
 }
 
-static void esp32_can_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
-    esp32_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
+static void machine_can_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
+    machine_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
 
     mp_printf(print, "CAN(");
     if (self->handle) {
@@ -114,8 +112,8 @@ static void esp32_can_print(const mp_print_t *print, mp_obj_t self_in, mp_print_
 }
 
 // INTERNAL FUNCTION FreeRTOS IRQ task
-static void esp32_can_irq_task(void *self_in) {
-    esp32_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
+static void machine_can_irq_task(void *self_in) {
+    machine_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
     uint32_t alerts;
 
     check_esp_err(twai_reconfigure_alerts_v2(self->handle, TWAI_ALERT_ALL, NULL));
@@ -129,14 +127,14 @@ static void esp32_can_irq_task(void *self_in) {
                 vTaskDelay(pdMS_TO_TICKS(1000));
             }
             twai_initiate_recovery_v2(self->handle); // Needs 128 occurrences of bus free signal
-            //debug_printf("Initiate bus recovery");
+            debug_printf("Initiate bus recovery");
         }
         if (alerts & TWAI_ALERT_ERR_PASS) {
-            //debug_printf("Entered Error Passive state");
+            // debug_printf("Entered Error Passive state");
             ++self->num_error_passive;
         }
         if (alerts & TWAI_ALERT_ABOVE_ERR_WARN) {
-            //debug_printf("Surpassed Error Warning Limit");
+            // debug_printf("Surpassed Error Warning Limit");
             ++self->num_error_warning;
         }
         if (alerts & (TWAI_ALERT_BUS_RECOVERED)) {
@@ -189,17 +187,17 @@ static void esp32_can_irq_task(void *self_in) {
     }
 }
 
-static mp_obj_t esp32_can_init_helper(esp32_can_obj_t *self, size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
-    enum { ARG_mode, ARG_prescaler, ARG_sjw, ARG_bs1, ARG_bs2, ARG_auto_restart, ARG_bitrate, ARG_extframe,
+static mp_obj_t machine_can_init_helper(machine_can_obj_t *self, size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    enum { ARG_bitrate, ARG_mode, ARG_prescaler, ARG_sjw, ARG_bs1, ARG_bs2, ARG_auto_restart, ARG_extframe,
            ARG_tx_io, ARG_rx_io, ARG_clkout_io, ARG_bus_off_io, ARG_tx_queue, ARG_rx_queue};
     static const mp_arg_t allowed_args[] = {
+        { MP_QSTR_bitrate, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 500000} },
         { MP_QSTR_mode, MP_ARG_REQUIRED | MP_ARG_INT, {.u_int = TWAI_MODE_NORMAL} },
         { MP_QSTR_prescaler, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = CAN_DEFAULT_PRESCALER} },
         { MP_QSTR_sjw, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = CAN_DEFAULT_SJW} },
         { MP_QSTR_bs1, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = CAN_DEFAULT_BS1} },
         { MP_QSTR_bs2, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = CAN_DEFAULT_BS2} },
         { MP_QSTR_auto_restart, MP_ARG_BOOL, {.u_bool = false} },
-        { MP_QSTR_bitrate, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 500000} },
         { MP_QSTR_extframe, MP_ARG_BOOL, {.u_bool = false} },
         { MP_QSTR_tx, MP_ARG_INT, {.u_int = 4} },
         { MP_QSTR_rx, MP_ARG_INT, {.u_int = 5} },
@@ -325,15 +323,10 @@ static mp_obj_t esp32_can_init_helper(esp32_can_obj_t *self, size_t n_args, cons
             mp_raise_ValueError(MP_ERROR_TEXT("Unable to set bitrate"));
             return mp_const_none;
     }
-    /*
-    esp_err_t err= twai_driver_install_v2(&self->g_config, &self->t_config, &self->f_config, &self->handle);
-    if ((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE)) {
-        check_esp_err(err);
-    }
-    */
+
     check_esp_err(twai_driver_install_v2(&self->g_config, &self->t_config, &self->f_config, &self->handle));
     check_esp_err(twai_start_v2(self->handle));
-    if (xTaskCreatePinnedToCore(esp32_can_irq_task, "can_irq_task", CAN_TASK_STACK_SIZE, self, CAN_TASK_PRIORITY, (TaskHandle_t *)&self->irq_handler, MP_TASK_COREID) != pdPASS) {
+    if (xTaskCreatePinnedToCore(machine_can_irq_task, "can_irq_task", CAN_TASK_STACK_SIZE, self, CAN_TASK_PRIORITY, (TaskHandle_t *)&self->irq_handler, MP_TASK_COREID) != pdPASS) {
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("failed to create can irq task handler"));
     }
     return mp_const_none;
@@ -341,7 +334,7 @@ static mp_obj_t esp32_can_init_helper(esp32_can_obj_t *self, size_t n_args, cons
 
 // CAN(bus, ...) No argument to get the object
 // If no arguments are provided, the initialized object will be returned
-static mp_obj_t esp32_can_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
+static mp_obj_t machine_can_make_new(const mp_obj_type_t *type, size_t n_args, size_t n_kw, const mp_obj_t *args) {
     // check arguments
     mp_arg_check_num(n_args, n_kw, 1, MP_OBJ_FUN_ARGS_MAX, true);
     if (mp_obj_is_int(args[0]) != true) {
@@ -354,11 +347,10 @@ static mp_obj_t esp32_can_make_new(const mp_obj_type_t *type, size_t n_args, siz
 //        mp_raise_msg_varg(&mp_type_ValueError, MP_ERROR_TEXT("out of CAN controllers:%d"), SOC_TWAI_CONTROLLER_NUM);
     }
 
-    esp32_can_obj_t *self = mp_obj_malloc(esp32_can_obj_t, &machine_can_type);
-    esp32_can_objs[can_idx] = self;
-    //esp32_can_obj_t *self = &esp32_can_objs[can_idx];
+    machine_can_obj_t *self = mp_obj_malloc(machine_can_obj_t, &machine_can_type);
+    machine_can_objs[can_idx] = self;
 
-    self->g_config = (twai_general_config_t)TWAI_GENERAL_CONFIG_DEFAULT_V2(can_idx, GPIO_NUM_22, GPIO_NUM_23, TWAI_MODE_NORMAL);
+    self->g_config = (twai_general_config_t)TWAI_GENERAL_CONFIG_DEFAULT_V2(can_idx, GPIO_NUM_4, GPIO_NUM_5, TWAI_MODE_NORMAL);
     self->f_config = (twai_filter_config_t)TWAI_FILTER_CONFIG_ACCEPT_ALL();
     self->t_config = (twai_timing_config_t)TWAI_TIMING_CONFIG_500KBITS();
     self->handle = NULL;
@@ -374,35 +366,35 @@ static mp_obj_t esp32_can_make_new(const mp_obj_type_t *type, size_t n_args, siz
             // start the peripheral
             mp_map_t kw_args;
             mp_map_init_fixed_table(&kw_args, n_kw, args + n_args);
-            esp32_can_init_helper(self, n_args - 1, args + 1, &kw_args);
+            machine_can_init_helper(self, n_args - 1, args + 1, &kw_args);
         }
     }
     return MP_OBJ_FROM_PTR(self);
 }
 
 // init(tx, rx, bitrate, mode=NORMAL, tx_queue=2, rx_queue=5)
-static mp_obj_t esp32_can_init(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
-    esp32_can_obj_t *self = MP_OBJ_TO_PTR(pos_args[0]);
+static mp_obj_t machine_can_init(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    machine_can_obj_t *self = MP_OBJ_TO_PTR(pos_args[0]);
     if (self->handle) {
         mp_raise_msg(&mp_type_RuntimeError, MP_ERROR_TEXT("Driver is already initialized"));
         return mp_const_none;
     }
-    return esp32_can_init_helper(self, n_args - 1, pos_args + 1, kw_args);
+    return machine_can_init_helper(self, n_args - 1, pos_args + 1, kw_args);
 }
-static MP_DEFINE_CONST_FUN_OBJ_KW(esp32_can_init_obj, 4, esp32_can_init);
+static MP_DEFINE_CONST_FUN_OBJ_KW(machine_can_init_obj, 4, machine_can_init);
 
 // deinit()
-static mp_obj_t esp32_can_deinit(const mp_obj_t self_in) {
-    esp32_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
+static mp_obj_t machine_can_deinit(const mp_obj_t self_in) {
+    machine_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
     can_deinit(self);
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_1(esp32_can_deinit_obj, esp32_can_deinit);
+static MP_DEFINE_CONST_FUN_OBJ_1(machine_can_deinit_obj, machine_can_deinit);
 
 // CAN.restart()
 // Force a software restart of the controller, to allow transmission after a bus error
-static mp_obj_t esp32_can_restart(mp_obj_t self_in) {
-    esp32_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
+static mp_obj_t machine_can_restart(mp_obj_t self_in) {
+    machine_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
     check_esp_err(twai_get_status_info_v2(self->handle, &self->status));
 
     self->bus_recovery_success = -1;
@@ -420,19 +412,19 @@ static mp_obj_t esp32_can_restart(mp_obj_t self_in) {
     }
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_1(esp32_can_restart_obj, esp32_can_restart);
+static MP_DEFINE_CONST_FUN_OBJ_1(machine_can_restart_obj, machine_can_restart);
 
 // Get the state of the controller
-static mp_obj_t esp32_can_state(mp_obj_t self_in) {
-    esp32_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
+static mp_obj_t machine_can_state(mp_obj_t self_in) {
+    machine_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
     check_esp_err(twai_get_status_info_v2(self->handle, &self->status));
     return mp_obj_new_int(self->status.state);
 }
-static MP_DEFINE_CONST_FUN_OBJ_1(esp32_can_state_obj, esp32_can_state);
+static MP_DEFINE_CONST_FUN_OBJ_1(machine_can_state_obj, machine_can_state);
 
 // info() -- Get info about error states and TX/RX buffers
-static mp_obj_t esp32_can_info(size_t n_args, const mp_obj_t *args) {
-    esp32_can_obj_t *self = MP_OBJ_TO_PTR(args[0]);
+static mp_obj_t machine_can_get_counters(size_t n_args, const mp_obj_t *args) {
+    machine_can_obj_t *self = MP_OBJ_TO_PTR(args[0]);
     check_esp_err(twai_get_status_info_v2(self->handle, &self->status));
     mp_obj_t dict = mp_obj_new_dict(0);
     #define dict_key(key) mp_obj_new_str(#key, strlen(#key))
@@ -450,28 +442,30 @@ static mp_obj_t esp32_can_info(size_t n_args, const mp_obj_t *args) {
     dict_store(bus_error_count);
     return dict;
 }
-static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(esp32_can_info_obj, 1, 2, esp32_can_info);
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(machine_can_get_counters_obj, 1, 2, machine_can_get_counters);
 
 // Get Alert info
-static mp_obj_t esp32_can_alert(mp_obj_t self_in) {
-    const esp32_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
+static mp_obj_t machine_can_alert(mp_obj_t self_in) {
+    const machine_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
     uint32_t alerts;
     check_esp_err(twai_read_alerts_v2(self->handle, &alerts, 0));
     return mp_obj_new_int(alerts);
 }
-static MP_DEFINE_CONST_FUN_OBJ_1(esp32_can_alert_obj, esp32_can_alert);
+static MP_DEFINE_CONST_FUN_OBJ_1(machine_can_alert_obj, machine_can_alert);
 
+/*
 // any() - return `True` if any message waiting, else `False`
-static mp_obj_t esp32_can_any(mp_obj_t self_in) {
-    esp32_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
+static mp_obj_t machine_can_any(mp_obj_t self_in) {
+    machine_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
     check_esp_err(twai_get_status_info_v2(self->handle, &self->status));
     return mp_obj_new_bool((self->status.msgs_to_rx) > 0);
 }
-static MP_DEFINE_CONST_FUN_OBJ_1(esp32_can_any_obj, esp32_can_any);
+static MP_DEFINE_CONST_FUN_OBJ_1(machine_can_any_obj, machine_can_any);
+*/
 
 // send([data], id, *, timeout=0, rtr=false, extframe=false)
 // CAN.send(identifier, data, flags=0, fifo_equal=True)
-static mp_obj_t esp32_can_send(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+static mp_obj_t machine_can_send(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_data, ARG_id, ARG_timeout, ARG_rtr, ARG_extframe };
     static const mp_arg_t allowed_args[] = {
         { MP_QSTR_data,     MP_ARG_REQUIRED | MP_ARG_OBJ, {.u_obj = MP_OBJ_NULL} },
@@ -482,7 +476,7 @@ static mp_obj_t esp32_can_send(size_t n_args, const mp_obj_t *pos_args, mp_map_t
     };
 
     // parse args
-    esp32_can_obj_t *self = MP_OBJ_TO_PTR(pos_args[0]);
+    machine_can_obj_t *self = MP_OBJ_TO_PTR(pos_args[0]);
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all(n_args - 1, pos_args + 1, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
 
@@ -513,7 +507,7 @@ static mp_obj_t esp32_can_send(size_t n_args, const mp_obj_t *pos_args, mp_map_t
     }
 
     check_esp_err(twai_get_status_info_v2(self->handle, &self->status));
-    //debug_printf("state:%d", self->status.state);
+    // debug_printf("state:%d", self->status.state);
     if (self->status.state == TWAI_STATE_RUNNING) {
         uint32_t timeout_ms = args[ARG_timeout].u_int;
 
@@ -542,11 +536,11 @@ static mp_obj_t esp32_can_send(size_t n_args, const mp_obj_t *pos_args, mp_map_t
         mp_raise_msg_varg(&mp_type_RuntimeError, MP_ERROR_TEXT("Driver is not in running state:%d"), self->status.state);
     }
 }
-static MP_DEFINE_CONST_FUN_OBJ_KW(esp32_can_send_obj, 3, esp32_can_send);
+static MP_DEFINE_CONST_FUN_OBJ_KW(machine_can_send_obj, 3, machine_can_send);
 
 // CAN.recv(list=None, *, timeout=5000)
-static mp_obj_t esp32_can_recv(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
-    esp32_can_obj_t *self = MP_OBJ_TO_PTR(pos_args[0]);
+static mp_obj_t machine_can_recv(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+    machine_can_obj_t *self = MP_OBJ_TO_PTR(pos_args[0]);
     enum { ARG_list, ARG_timeout };
     static const mp_arg_t allowed_args[] = {
         { MP_QSTR_list, MP_ARG_OBJ, {.u_rom_obj = MP_ROM_NONE} },
@@ -560,7 +554,7 @@ static mp_obj_t esp32_can_recv(size_t n_args, const mp_obj_t *pos_args, mp_map_t
     uint32_t timeout_ms = args[ARG_timeout].u_int;
 
     check_esp_err(twai_get_status_info_v2(self->handle, &self->status));
-    //debug_printf("1 state:%d", self->status.state);
+    // debug_printf("1 state:%d", self->status.state);
     uint32_t start = mp_hal_ticks_ms();
     while (self->status.state != TWAI_STATE_RUNNING) {
         if (timeout_ms != portMAX_DELAY) {
@@ -571,7 +565,7 @@ static mp_obj_t esp32_can_recv(size_t n_args, const mp_obj_t *pos_args, mp_map_t
         MICROPY_EVENT_POLL_HOOK;
         check_esp_err(twai_get_status_info_v2(self->handle, &self->status));
     }
-    //debug_printf("2 state:%d", self->status.state);
+    // debug_printf("2 state:%d", self->status.state);
 
     // receive the data
     twai_message_t rx_msg;
@@ -615,11 +609,11 @@ static mp_obj_t esp32_can_recv(size_t n_args, const mp_obj_t *pos_args, mp_map_t
     // Return the result
     return ret_obj;
 }
-static MP_DEFINE_CONST_FUN_OBJ_KW(esp32_can_recv_obj, 1, esp32_can_recv);
+static MP_DEFINE_CONST_FUN_OBJ_KW(machine_can_recv_obj, 1, machine_can_recv);
 
 // Clear filters setting
-static mp_obj_t esp32_can_clearfilter(mp_obj_t self_in) {
-    esp32_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
+static mp_obj_t machine_can_clear_filters(mp_obj_t self_in) {
+    machine_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
 
     // Defaults from TWAI_FILTER_CONFIG_ACCEPT_ALL
     self->f_config = (twai_filter_config_t)TWAI_FILTER_CONFIG_ACCEPT_ALL();
@@ -627,20 +621,11 @@ static mp_obj_t esp32_can_clearfilter(mp_obj_t self_in) {
     // Apply filter
     check_esp_err(twai_stop_v2(self->handle));
     check_esp_err(twai_driver_uninstall_v2(self->handle));
-    /*
-    esp_err_t err= twai_driver_install_v2(
-        &self->g_config,
-        &self->t_config,
-        &self->f_config, &self->handle);
-    if ((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE)) {
-        check_esp_err(err);
-    }
-    */
     check_esp_err(twai_driver_install_v2(&self->g_config, &self->t_config, &self->f_config, &self->handle));
     check_esp_err(twai_start_v2(self->handle));
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_1(esp32_can_clearfilter_obj, esp32_can_clearfilter);
+static MP_DEFINE_CONST_FUN_OBJ_1(machine_can_clear_filters_obj, machine_can_clear_filters);
 
 // bank: 0 only
 // mode: FILTER_RAW_SINGLE, FILTER_RAW_DUAL or FILTER_ADDR_SINGLE or FILTER_ADDR_DUAL
@@ -648,7 +633,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(esp32_can_clearfilter_obj, esp32_can_clearfilte
 // rtr: ignored if FILTER_RAW
 // Set CAN HW filter
 // CAN.set_filters(filters)
-static mp_obj_t esp32_can_set_filters(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+static mp_obj_t machine_can_set_filters(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     enum { ARG_bank, ARG_mode, ARG_params, ARG_rtr, ARG_extframe };
     static const mp_arg_t allowed_args[] = {
         { MP_QSTR_bank,     MP_ARG_REQUIRED | MP_ARG_INT, {.u_int = 0} },
@@ -659,7 +644,7 @@ static mp_obj_t esp32_can_set_filters(size_t n_args, const mp_obj_t *pos_args, m
     };
 
     // parse args
-    esp32_can_obj_t *self = MP_OBJ_TO_PTR(pos_args[0]);
+    machine_can_obj_t *self = MP_OBJ_TO_PTR(pos_args[0]);
     mp_arg_val_t args[MP_ARRAY_SIZE(allowed_args)];
     mp_arg_parse_all(n_args - 1, pos_args + 1, kw_args, MP_ARRAY_SIZE(allowed_args), allowed_args, args);
     const int can_idx = args[ARG_bank].u_int;
@@ -684,7 +669,7 @@ static mp_obj_t esp32_can_set_filters(size_t n_args, const mp_obj_t *pos_args, m
         self->f_config.acceptance_mask = mask;
     } else {
         self->f_config.single_filter = self->extframe;
-        // esp32_can_set_filters(self, id, mask, args[ARG_bank].u_int, args[ARG_rtr].u_int);
+        // machine_can_set_filters(self, id, mask, args[ARG_bank].u_int, args[ARG_rtr].u_int);
         // Check if bank is allowed
         int bank = 0;
         if (bank > ((self->extframe && self->f_config.single_filter) ? 0 : 1)) {
@@ -726,26 +711,15 @@ static mp_obj_t esp32_can_set_filters(size_t n_args, const mp_obj_t *pos_args, m
         check_esp_err(twai_stop_v2(self->handle));
         check_esp_err(twai_driver_uninstall_v2(self->handle));
     }
-    /*
-    esp_err_t err= twai_driver_install_v2(
-        &self->g_config,
-        &self->t_config,
-        &self->f_config,
-        &self->handle
-        );
-    if ((err != ESP_OK) && (err != ESP_ERR_INVALID_STATE)) {
-        check_esp_err(err);
-    }
-    */
     check_esp_err(twai_driver_install_v2(&self->g_config, &self->t_config, &self->f_config, &self->handle));
     check_esp_err(twai_start_v2(self->handle));
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_KW(esp32_can_set_filters_obj, 1, esp32_can_set_filters);
+static MP_DEFINE_CONST_FUN_OBJ_KW(machine_can_set_filters_obj, 1, machine_can_set_filters);
 
 // CAN.irq_recv(callback, hard=False)
-static mp_obj_t esp32_can_irq_recv(mp_obj_t self_in, mp_obj_t callback_in) {
-    esp32_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
+static mp_obj_t machine_can_irq_recv(mp_obj_t self_in, mp_obj_t callback_in) {
+    machine_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
     if (callback_in == mp_const_none) {
         // disable callback
         self->rx_callback = mp_const_none;
@@ -755,11 +729,11 @@ static mp_obj_t esp32_can_irq_recv(mp_obj_t self_in, mp_obj_t callback_in) {
     }
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(esp32_can_irq_recv_obj, esp32_can_irq_recv);
+static MP_DEFINE_CONST_FUN_OBJ_2(machine_can_irq_recv_obj, machine_can_irq_recv);
 
 // CAN.irq_send(callback, hard=False)
-static mp_obj_t esp32_can_irq_send(mp_obj_t self_in, mp_obj_t callback_in) {
-    esp32_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
+static mp_obj_t machine_can_irq_send(mp_obj_t self_in, mp_obj_t callback_in) {
+    machine_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
     // mp_obj_t callback_in = NULL;
     if (callback_in == mp_const_none) {
         // disable callback
@@ -770,116 +744,84 @@ static mp_obj_t esp32_can_irq_send(mp_obj_t self_in, mp_obj_t callback_in) {
     }
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(esp32_can_irq_send_obj, esp32_can_irq_send);
-
-// CAN.get_state()
-static mp_obj_t esp32_can_get_state(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_KW(esp32_can_get_state_obj, 3, esp32_can_get_state);
-
-// CAN.get_counters([list] /)
-static mp_obj_t esp32_can_get_counters(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_KW(esp32_can_get_counters_obj, 3, esp32_can_get_counters);
+static MP_DEFINE_CONST_FUN_OBJ_2(machine_can_irq_send_obj, machine_can_irq_send);
 
 // CAN.get_timings([list])
-static mp_obj_t esp32_can_get_timings(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+static mp_obj_t machine_can_get_timings(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_KW(esp32_can_get_timings_obj, 3, esp32_can_get_timings);
-
-// CAN.reset(mode=CAN.Mode.NORMAL)
-static mp_obj_t esp32_can_reset(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
-    return mp_const_none;
-}
-static MP_DEFINE_CONST_FUN_OBJ_KW(esp32_can_reset_obj, 3, esp32_can_reset);
+static MP_DEFINE_CONST_FUN_OBJ_KW(machine_can_get_timings_obj, 3, machine_can_get_timings);
 
 // CAN.mode([mode])
-static mp_obj_t esp32_can_mode(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
+static mp_obj_t machine_can_mode(size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_KW(esp32_can_mode_obj, 3, esp32_can_mode);
+static MP_DEFINE_CONST_FUN_OBJ_KW(machine_can_mode_obj, 3, machine_can_mode);
 
 // Clear TX Queue
-static mp_obj_t esp32_can_clear_tx_queue(mp_obj_t self_in) {
-    const esp32_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
+static mp_obj_t machine_can_cancel_send(mp_obj_t self_in) {
+    const machine_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
     return mp_obj_new_bool(twai_clear_transmit_queue_v2(self->handle) == ESP_OK);
 }
-static MP_DEFINE_CONST_FUN_OBJ_1(esp32_can_clear_tx_queue_obj, esp32_can_clear_tx_queue);
+static MP_DEFINE_CONST_FUN_OBJ_1(machine_can_cancel_send_obj, machine_can_cancel_send);
 
 // Clear RX Queue
-static mp_obj_t esp32_can_clear_rx_queue(mp_obj_t self_in) {
-    const esp32_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
+static mp_obj_t machine_can_clear_rx_queue(mp_obj_t self_in) {
+    const machine_can_obj_t *self = MP_OBJ_TO_PTR(self_in);
     return mp_obj_new_bool(twai_clear_receive_queue_v2(self->handle) == ESP_OK);
 }
-static MP_DEFINE_CONST_FUN_OBJ_1(esp32_can_clear_rx_queue_obj, esp32_can_clear_rx_queue);
+static MP_DEFINE_CONST_FUN_OBJ_1(machine_can_clear_rx_queue_obj, machine_can_clear_rx_queue);
 
-static const mp_rom_map_elem_t esp32_can_locals_dict_table[] = {
+static const mp_rom_map_elem_t machine_can_locals_dict_table[] = {
     // CAN_ATTRIBUTES
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_CAN) },
-    // Micropython Generic API
-    { MP_ROM_QSTR(MP_QSTR_init), MP_ROM_PTR(&esp32_can_init_obj) },
-    { MP_ROM_QSTR(MP_QSTR_deinit), MP_ROM_PTR(&esp32_can_deinit_obj) },
-    { MP_ROM_QSTR(MP_QSTR_restart), MP_ROM_PTR(&esp32_can_restart_obj) },
-    { MP_ROM_QSTR(MP_QSTR_state), MP_ROM_PTR(&esp32_can_state_obj) },
-    { MP_ROM_QSTR(MP_QSTR_info), MP_ROM_PTR(&esp32_can_info_obj) },
-    { MP_ROM_QSTR(MP_QSTR_any), MP_ROM_PTR(&esp32_can_any_obj) },
-    { MP_ROM_QSTR(MP_QSTR_send), MP_ROM_PTR(&esp32_can_send_obj) },
-    { MP_ROM_QSTR(MP_QSTR_recv), MP_ROM_PTR(&esp32_can_recv_obj) },
-    { MP_ROM_QSTR(MP_QSTR_irq_send), MP_ROM_PTR(&esp32_can_irq_send_obj) },
-    { MP_ROM_QSTR(MP_QSTR_irq_recv), MP_ROM_PTR(&esp32_can_irq_recv_obj) },
-    { MP_ROM_QSTR(MP_QSTR_set_filters), MP_ROM_PTR(&esp32_can_set_filters_obj) },
-    { MP_ROM_QSTR(MP_QSTR_clearfilter), MP_ROM_PTR(&esp32_can_clearfilter_obj) },
+    // MicroPython Generic API
+    { MP_ROM_QSTR(MP_QSTR_init), MP_ROM_PTR(&machine_can_init_obj) },
+    { MP_ROM_QSTR(MP_QSTR_deinit), MP_ROM_PTR(&machine_can_deinit_obj) },
+    { MP_ROM_QSTR(MP_QSTR_irq_send), MP_ROM_PTR(&machine_can_irq_send_obj) },
+    { MP_ROM_QSTR(MP_QSTR_irq_recv), MP_ROM_PTR(&machine_can_irq_recv_obj) },
+    { MP_ROM_QSTR(MP_QSTR_send), MP_ROM_PTR(&machine_can_send_obj) },
+    { MP_ROM_QSTR(MP_QSTR_cancel_send), MP_ROM_PTR(&machine_can_cancel_send_obj) },
+    { MP_ROM_QSTR(MP_QSTR_recv), MP_ROM_PTR(&machine_can_recv_obj) },
+    { MP_ROM_QSTR(MP_QSTR_set_filters), MP_ROM_PTR(&machine_can_set_filters_obj) },
+    { MP_ROM_QSTR(MP_QSTR_state), MP_ROM_PTR(&machine_can_state_obj) },
+    { MP_ROM_QSTR(MP_QSTR_get_counters), MP_ROM_PTR(&machine_can_get_counters_obj) },
+//  { MP_ROM_QSTR(MP_QSTR_any), MP_ROM_PTR(&machine_can_any_obj) },
+    { MP_ROM_QSTR(MP_QSTR_clear_filters), MP_ROM_PTR(&machine_can_clear_filters_obj) },
+    { MP_ROM_QSTR(MP_QSTR_restart), MP_ROM_PTR(&machine_can_restart_obj) },
 
-    { MP_ROM_QSTR(MP_QSTR_get_state), MP_ROM_PTR(&esp32_can_get_state_obj) },
-    { MP_ROM_QSTR(MP_QSTR_get_counters), MP_ROM_PTR(&esp32_can_get_counters_obj) },
-    { MP_ROM_QSTR(MP_QSTR_get_timings), MP_ROM_PTR(&esp32_can_get_timings_obj) },
-    { MP_ROM_QSTR(MP_QSTR_reset), MP_ROM_PTR(&esp32_can_reset_obj) },
-    { MP_ROM_QSTR(MP_QSTR_mode), MP_ROM_PTR(&esp32_can_mode_obj) },
+    { MP_ROM_QSTR(MP_QSTR_get_timings), MP_ROM_PTR(&machine_can_get_timings_obj) },
+    { MP_ROM_QSTR(MP_QSTR_mode), MP_ROM_PTR(&machine_can_mode_obj) },
     // ESP32 Specific API
-    { MP_OBJ_NEW_QSTR(MP_QSTR_clear_tx_queue), MP_ROM_PTR(&esp32_can_clear_tx_queue_obj) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_clear_rx_queue), MP_ROM_PTR(&esp32_can_clear_rx_queue_obj) },
-    { MP_OBJ_NEW_QSTR(MP_QSTR_get_alerts), MP_ROM_PTR(&esp32_can_alert_obj) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_clear_rx_queue), MP_ROM_PTR(&machine_can_clear_rx_queue_obj) },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_get_alerts), MP_ROM_PTR(&machine_can_alert_obj) },
     // CAN_MODE
     // class CAN.Mode
-    { MP_ROM_QSTR(MP_QSTR_NORMAL), MP_ROM_INT(MODE_NORMAL) },
-    { MP_ROM_QSTR(MP_QSTR_SLEEP), MP_ROM_INT(MODE_SLEEP) },
-    { MP_ROM_QSTR(MP_QSTR_LOOPBACK), MP_ROM_INT(MODE_LOOPBACK) },
-    { MP_ROM_QSTR(MP_QSTR_SILENT), MP_ROM_INT(MODE_SILENT) },
-    { MP_ROM_QSTR(MP_QSTR_SILENT_LOOPBACK), MP_ROM_INT(MODE_SILENT_LOOPBACK) },
-    { MP_ROM_QSTR(MP_QSTR_LISTEN_ONLY), MP_ROM_INT(MODE_LISTEN_ONLY) },
-/* esp32 can modes
-TWAI_MODE_NORMAL      - Normal operating mode where TWAI controller can send/receive/acknowledge messages
-TWAI_MODE_NO_ACK      - Transmission does not require acknowledgment. Use this mode for self testing. // This mode is useful when self testing the TWAI controller (loopback of transmissions).
-TWAI_MODE_LISTEN_ONLY - The TWAI controller will not influence the bus (No transmissions or acknowledgments) but can receive messages. // This mode is suited for bus monitor applications.
-*/
-/* stm32 can modes
-#define CAN_MODE_NORMAL             FDCAN_MODE_NORMAL
-#define CAN_MODE_LOOPBACK           FDCAN_MODE_EXTERNAL_LOOPBACK
-#define CAN_MODE_SILENT             FDCAN_MODE_BUS_MONITORING
-#define CAN_MODE_SILENT_LOOPBACK    FDCAN_MODE_INTERNAL_LOOPBACK
-*/
+    { MP_ROM_QSTR(MP_QSTR_MODE_NORMAL), MP_ROM_INT(MODE_NORMAL) },
+    { MP_ROM_QSTR(MP_QSTR_MODE_SLEEP), MP_ROM_INT(MODE_SLEEP) },
+    { MP_ROM_QSTR(MP_QSTR_MODE_LOOPBACK), MP_ROM_INT(MODE_LOOPBACK) },
+    { MP_ROM_QSTR(MP_QSTR_MODE_SILENT), MP_ROM_INT(MODE_SILENT) },
+    { MP_ROM_QSTR(MP_QSTR_MODE_SILENT_LOOPBACK), MP_ROM_INT(MODE_SILENT_LOOPBACK) },
+    { MP_ROM_QSTR(MP_QSTR_MODE_LISTEN_ONLY), MP_ROM_INT(MODE_LISTEN_ONLY) },
     // CAN_STATE
     // class CAN.State
-    { MP_ROM_QSTR(MP_QSTR_STOPPED), MP_ROM_INT(TWAI_STATE_STOPPED) },
-    { MP_ROM_QSTR(MP_QSTR_ERROR_ACTIVE), MP_ROM_INT(TWAI_STATE_RUNNING) },
-    { MP_ROM_QSTR(MP_QSTR_ERROR_WARNING), MP_ROM_INT(-1) },
-    { MP_ROM_QSTR(MP_QSTR_ERROR_PASSIVE), MP_ROM_INT(-1) },
-    { MP_ROM_QSTR(MP_QSTR_BUS_OFF), MP_ROM_INT(TWAI_STATE_BUS_OFF) },
-    { MP_ROM_QSTR(MP_QSTR_RECOVERING), MP_ROM_INT(TWAI_STATE_RECOVERING) }, // esp32 specific
+    { MP_ROM_QSTR(MP_QSTR_STATE_STOPPED), MP_ROM_INT(TWAI_STATE_STOPPED) },
+    { MP_ROM_QSTR(MP_QSTR_STATE_ACTIVE), MP_ROM_INT(TWAI_STATE_RUNNING) },
+    { MP_ROM_QSTR(MP_QSTR_STATE_WARNING), MP_ROM_INT(-1) },
+    { MP_ROM_QSTR(MP_QSTR_STATE_PASSIVE), MP_ROM_INT(-1) },
+    { MP_ROM_QSTR(MP_QSTR_STATE_BUS_OFF), MP_ROM_INT(TWAI_STATE_BUS_OFF) },
+    { MP_ROM_QSTR(MP_QSTR_STATE_RECOVERING), MP_ROM_INT(TWAI_STATE_RECOVERING) }, // esp32 specific
 
     // class CAN.MessageFlags
-    { MP_ROM_QSTR(MP_QSTR_RTR), MP_ROM_INT(RTR) },
-    { MP_ROM_QSTR(MP_QSTR_EXTENDED_ID), MP_ROM_INT(EXTENDED_ID) },
-    { MP_ROM_QSTR(MP_QSTR_FD_F), MP_ROM_INT(FD_F) },
-    { MP_ROM_QSTR(MP_QSTR_BRS), MP_ROM_INT(BRS) },
+    { MP_ROM_QSTR(MP_QSTR_FLAG_RTR), MP_ROM_INT(FLAG_RTR) },
+    { MP_ROM_QSTR(MP_QSTR_FLAG_EXT_ID), MP_ROM_INT(FLAG_EXT_ID) },
+    { MP_ROM_QSTR(FLAG_UNORDERED), MP_ROM_INT(FLAG_UNORDERED) },
+//    { MP_ROM_QSTR(MP_QSTR_FLAG_FD_F), MP_ROM_INT(FLAG_FD_F) },
+//    { MP_ROM_QSTR(MP_QSTR_FLAG_BRS), MP_ROM_INT(FLAG_BRS) },
     // class CAN.RecvErrors
-    { MP_ROM_QSTR(MP_QSTR_CRC), MP_ROM_INT(CRC) },
-    { MP_ROM_QSTR(MP_QSTR_FORM), MP_ROM_INT(FORM) },
-    { MP_ROM_QSTR(MP_QSTR_OVERRUN), MP_ROM_INT(OVERRUN) },
-    { MP_ROM_QSTR(MP_QSTR_ESI), MP_ROM_INT(ESI) },
+    { MP_ROM_QSTR(MP_QSTR_RECV_ERR_FULL), MP_ROM_INT(RECV_ERR_FULL) },
+    { MP_ROM_QSTR(MP_QSTR_RECV_ERR_OVERRUN), MP_ROM_INT(RECV_ERR_OVERRUN) },
+    { MP_ROM_QSTR(MP_QSTR_RECV_ERR_ESI), MP_ROM_INT(RECV_ERR_ESI) },
     // class CAN.SendErrors
     { MP_ROM_QSTR(MP_QSTR_ARB), MP_ROM_INT(ARB) },
     { MP_ROM_QSTR(MP_QSTR_NACK), MP_ROM_INT(NACK) },
@@ -909,16 +851,16 @@ TWAI_MODE_LISTEN_ONLY - The TWAI controller will not influence the bus (No trans
     { MP_ROM_QSTR(MP_QSTR_ALERT_ALL), MP_ROM_INT(TWAI_ALERT_ALL) },
     { MP_ROM_QSTR(MP_QSTR_ALERT_NONE), MP_ROM_INT(TWAI_ALERT_NONE) }
 };
-static MP_DEFINE_CONST_DICT(esp32_can_locals_dict, esp32_can_locals_dict_table);
+static MP_DEFINE_CONST_DICT(machine_can_locals_dict, machine_can_locals_dict_table);
 
 // Python object definition
 MP_DEFINE_CONST_OBJ_TYPE(
     machine_can_type,
     MP_QSTR_CAN,
     MP_TYPE_FLAG_NONE,
-    make_new, esp32_can_make_new,
-    print, esp32_can_print,
-    locals_dict, (mp_obj_dict_t *)&esp32_can_locals_dict
+    make_new, machine_can_make_new,
+    print, machine_can_print,
+    locals_dict, (mp_obj_dict_t *)&machine_can_locals_dict
     );
 
 #endif // MICROPY_PY_MACHINE_CAN
