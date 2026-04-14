@@ -324,7 +324,8 @@ def run_motor_relative_motion_by_axis(self, speed, acceleration, relative_axis):
     Note: If the motor is rotating more than 1000 RPM, it is not a good idea to stop the motor immediately.
     """
     if self.is_motor_running():
-        raise motor_already_running_error("")
+        # raise motor_already_running_error("")
+        return RunMotorResult.RunStarting
     self._validate_speed(speed)
     self._validate_acceleration(acceleration)
     self._validate_axis(relative_axis)
