@@ -188,16 +188,16 @@ static void machine_can_irq_task(void *self_in) {
 }
 
 static mp_obj_t machine_can_init_helper(machine_can_obj_t *self, size_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args) {
-    enum { ARG_bitrate, ARG_mode, ARG_prescaler, ARG_sjw, ARG_bs1, ARG_bs2, ARG_auto_restart, ARG_extframe,
+    enum { ARG_mode, ARG_prescaler, ARG_sjw, ARG_bs1, ARG_bs2, ARG_auto_restart, ARG_bitrate, ARG_extframe,
            ARG_tx_io, ARG_rx_io, ARG_clkout_io, ARG_bus_off_io, ARG_tx_queue, ARG_rx_queue};
     static const mp_arg_t allowed_args[] = {
-        { MP_QSTR_bitrate, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 500000} },
         { MP_QSTR_mode, MP_ARG_REQUIRED | MP_ARG_INT, {.u_int = TWAI_MODE_NORMAL} },
         { MP_QSTR_prescaler, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = CAN_DEFAULT_PRESCALER} },
         { MP_QSTR_sjw, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = CAN_DEFAULT_SJW} },
         { MP_QSTR_bs1, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = CAN_DEFAULT_BS1} },
         { MP_QSTR_bs2, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = CAN_DEFAULT_BS2} },
         { MP_QSTR_auto_restart, MP_ARG_BOOL, {.u_bool = false} },
+        { MP_QSTR_bitrate, MP_ARG_KW_ONLY | MP_ARG_INT, {.u_int = 500000} },
         { MP_QSTR_extframe, MP_ARG_BOOL, {.u_bool = false} },
         { MP_QSTR_tx, MP_ARG_INT, {.u_int = 4} },
         { MP_QSTR_rx, MP_ARG_INT, {.u_int = 5} },
