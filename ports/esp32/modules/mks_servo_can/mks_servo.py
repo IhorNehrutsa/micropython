@@ -7,7 +7,6 @@ except ImportError as e:
 import time
 import logging
 
-from enum import Enum
 from mks_servo_can.mks_enums import *
 
 
@@ -194,7 +193,6 @@ class MksServo:
                         status_int = int.from_bytes(message.data[1:2], byteorder="big")
                         try:
                             self._homing_status = self.GoHomeResult(status_int)
-                            # print("self._homing_status", self._homing_status)
                         except ValueError:
                             logging.warning(f"No enum member with value {status_int}")
                     elif op_code == MksCommands.QUERY_MOTOR_STATUS_COMMAND:
@@ -330,8 +328,11 @@ class MksServo:
         Returns:
             dict: A dictionary with 'status' key if successful, None otherwise.
         """
-        if isinstance(op_code, Enum):
-            op_code = op_code
+        #print('isinstance(op_code, Enum)', isinstance(op_code, Enum), op_code, type(op_code))
+        try:
+            op_code = op_code.value
+        except:
+            pass
 
         # Check if data is an integer and convert it to a list if it is
         if isinstance(data, int):
@@ -420,7 +421,7 @@ class MksServo:
             raise InvalidResponseError(f"No enum member with value {status_int}")
 
     def specialized_state(self, op_code: MksCommands, status_enum, status_enum_exception, data=None):
-        tmp = self.set_generic(op_code, self.GENERIC_RESPONSE_LENGTH, [op_code] if data is None else data)
+        tmp = self.set_generic(op_code, self.GENERIC_RESPONSE_LENGTH, [op_code.value] if data is None else data)
         if tmp is None:
             return None
         status_int = int.from_bytes(tmp[1:2], byteorder="big")

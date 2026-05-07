@@ -132,7 +132,7 @@ def set_work_mode(self, mode: WorkMode):
 
     Note: Setting CrOpen, CrClose or CrvFoc will lose communication over CAN.
     """
-    return self.set_generic_status(MksCommands.SET_WORK_MODE_COMMAND, mode)
+    return self.set_generic_status(MksCommands.SET_WORK_MODE_COMMAND, mode.value)
 
 
 def set_working_current(self, current):
@@ -169,7 +169,7 @@ def set_holding_current(self, strength: HoldingStrength):
 
     Note: Only for OPEN and CLOSE mode, vFOC mode is invalid.
     """
-    return self.set_generic_status(MksCommands.SET_HOLDING_CURRENT_COMMAND, strength)
+    return self.set_generic_status(MksCommands.SET_HOLDING_CURRENT_COMMAND, strength.value)
 
 
 def set_subdivisions(self, mstep):
@@ -201,7 +201,7 @@ def set_en_pin_config(self, enable: EnPinEnable):
     Raises:
         can.CanError: If there is an error in sending the CAN message.
     """
-    return self.set_generic_status(MksCommands.SET_EN_PIN_CONFIG_COMMAND, enable)
+    return self.set_generic_status(MksCommands.SET_EN_PIN_CONFIG_COMMAND, enable.value)
 
 
 def set_motor_rotation_direction(self, direction: Direction):
@@ -219,7 +219,7 @@ def set_motor_rotation_direction(self, direction: Direction):
 
     Note: Only for pulse interface, the direction of serial interface is set by command.
     """
-    return self.set_generic_status(MksCommands.SET_MOTOR_ROTATION_DIRECTION, direction)
+    return self.set_generic_status(MksCommands.SET_MOTOR_ROTATION_DIRECTION, direction.value)
 
 
 def set_auto_turn_off_screen(self, enable: Enable):
@@ -238,7 +238,7 @@ def set_auto_turn_off_screen(self, enable: Enable):
     Note: If set to Enable, the screen will automatically turn off after about 15 seconds, and
         any button can wake up the screen again.
     """
-    return self.set_generic_status(MksCommands.SET_AUTO_TURN_OFF_SCREEN_COMMAND, enable)
+    return self.set_generic_status(MksCommands.SET_AUTO_TURN_OFF_SCREEN_COMMAND, enable.value)
 
 
 def set_motor_shaft_locked_rotor_protection(self, enable: Enable):
@@ -256,7 +256,7 @@ def set_motor_shaft_locked_rotor_protection(self, enable: Enable):
 
     Note: Same as the "Protect" option on screen.
     """
-    return self.set_generic_status(MksCommands.SET_MOTOR_SHAFT_LOCKED_ROTOR_PROTECTION_COMMAND, enable)
+    return self.set_generic_status(MksCommands.SET_MOTOR_SHAFT_LOCKED_ROTOR_PROTECTION_COMMAND, enable.value)
 
 
 def set_subdivision_interpolation(self, enable: Enable):
@@ -274,7 +274,7 @@ def set_subdivision_interpolation(self, enable: Enable):
 
     Note: Same as the "Mplyer" option on screen.
     """
-    return self.set_generic_status(MksCommands.SET_SUBDIVISION_INTERPOLATION_COMMAND, enable)
+    return self.set_generic_status(MksCommands.SET_SUBDIVISION_INTERPOLATION_COMMAND, enable.value)
 
 
 def set_can_bitrate(self, bitrate: CanBitrate):
@@ -292,7 +292,7 @@ def set_can_bitrate(self, bitrate: CanBitrate):
 
     Note: Same as the "CanRate" option on screen.
     """
-    return self.set_generic_status(MksCommands.SET_CAN_BITRATE_COMMAND, bitrate)
+    return self.set_generic_status(MksCommands.SET_CAN_BITRATE_COMMAND, bitrate.value)
 
 
 def set_can_id(self, can_id):
@@ -327,7 +327,7 @@ def set_slave_respond_active(self, respon: Enable, active: Enable):
     Raises:
         can.CanError: If there is an error in sending the CAN message.
     """
-    return self.set_generic_status(MksCommands.SET_SLAVE_RESPOND_ACTIVE_COMMAND, [respon, active])
+    return self.set_generic_status(MksCommands.SET_SLAVE_RESPOND_ACTIVE_COMMAND, [respon.value, active.value])
 
 
 def set_key_lock(self, enable: Enable):
@@ -343,7 +343,7 @@ def set_key_lock(self, enable: Enable):
     Raises:
         can.CanError: If there is an error in sending the CAN message.
     """
-    return self.set_generic_status(MksCommands.SET_KEY_LOCK_ENABLE_COMMAND, enable)
+    return self.set_generic_status(MksCommands.SET_KEY_LOCK_ENABLE_COMMAND, enable.value)
 
 
 def set_group_id(self, group_id):
@@ -386,11 +386,11 @@ def set_home(self, homeTrig: EndStopLevel, homeDir: Direction, homeSpeed, endLim
     return self.set_generic_status(
         MksCommands.SET_HOME_COMMAND,
         [
-            homeTrig,
-            homeDir,
+            homeTrig.value,
+            homeDir.value,
             (homeSpeed >> 8) & 0xF,
             homeSpeed & 0xFF,
-            endLimit,
+            endLimit.value,
         ],
     )
 
@@ -487,7 +487,7 @@ def set_limit_port_remap(self, enable: Enable):
     Raises:
         can.CanError: If there is an error in sending the CAN message.
     """
-    return self.set_generic_status(MksCommands.SET_LIMIT_PORT_REMAP_COMMAND, enable)
+    return self.set_generic_status(MksCommands.SET_LIMIT_PORT_REMAP_COMMAND, enable.value)
 
 
 def set_mode0(self, mode: Mode0, enable: Enable, speed: int, direction: Direction):
@@ -509,7 +509,7 @@ def set_mode0(self, mode: Mode0, enable: Enable, speed: int, direction: Directio
     """
     return self.set_generic_status(
         MksCommands.SET_MODE0_COMMAND,
-        [mode, enable, speed, direction],
+        [mode.value, enable.value, speed, direction.value],
     )
 
 

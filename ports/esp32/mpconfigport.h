@@ -131,8 +131,8 @@
 #define MICROPY_PY_MACHINE_PIN_MAKE_NEW     mp_pin_make_new
 #define MICROPY_PY_MACHINE_BITSTREAM        (1)
 #define MICROPY_PY_MACHINE_DHT_READINTO     (1)
-#define MICROPY_PY_MACHINE_PULSE            (1)
-#define MICROPY_PY_MACHINE_PWM              (1)
+#define MICROPY_PY_MACHINE_PULSE            (0)
+#define MICROPY_PY_MACHINE_PWM              (0)
 #define MICROPY_PY_MACHINE_PWM_DUTY         (1)
 #define MICROPY_PY_MACHINE_PWM_INCLUDEFILE  "ports/esp32/machine_pwm.c"
 #define MICROPY_PY_MACHINE_I2C              (1)
@@ -143,14 +143,15 @@
 #define MICROPY_PY_MACHINE_I2C_TARGET_INCLUDEFILE "ports/esp32/machine_i2c_target.c"
 #define MICROPY_PY_MACHINE_I2C_TARGET_MAX   (2)
 #endif
-#define MICROPY_PY_MACHINE_SOFTI2C          (1)
+#define MICROPY_PY_MACHINE_SOFTI2C          (0)
 #define MICROPY_PY_MACHINE_SPI              (1)
 #define MICROPY_PY_MACHINE_SPI_MSB          (0)
 #define MICROPY_PY_MACHINE_SPI_LSB          (1)
 #ifndef MICROPY_PY_MACHINE_PCNT
-#define MICROPY_PY_MACHINE_PCNT             (1)
+#define MICROPY_PY_MACHINE_PCNT             (0)
 #endif
-#define MICROPY_PY_MACHINE_SOFTSPI          (1)
+#define MICROPY_PY_MACHINE_SOFTSPI          (0)
+#define MICROPY_PY_MACHINE_DAC              (0)
 #ifndef MICROPY_PY_MACHINE_DAC
 #define MICROPY_PY_MACHINE_DAC              (SOC_DAC_SUPPORTED)
 #endif
@@ -196,7 +197,7 @@
 #define MICROPY_PY_NETWORK_WLAN             (1)
 #endif
 #ifndef MICROPY_HW_ENABLE_SDCARD
-#define MICROPY_HW_ENABLE_SDCARD            (1)
+#define MICROPY_HW_ENABLE_SDCARD            (0)
 #endif
 #define MICROPY_HW_SOFTSPI_MIN_DELAY        (0)
 #define MICROPY_HW_SOFTSPI_MAX_BAUDRATE     (esp_rom_get_cpu_ticks_per_us() * 1000000 / 200) // roughly

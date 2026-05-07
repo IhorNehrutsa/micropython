@@ -176,3 +176,27 @@ class MotorStatus(Enum):
 class MotorShaftProtectionStatus(Enum):  # StatusCommand9
     Protected = 1
     NotProtected = 0
+
+
+
+
+MksCommands()
+Direction()
+Enable()
+EnableStatus()
+SuccessStatus()
+GoBackToZeroStatus()
+LockedRotor()
+CalibrationResult()
+WorkMode()
+HoldingStrength()
+EnPinEnable()
+CanBitrate()
+EndStopLevel()
+GoHomeResult()
+Mode0()
+SaveCleanState()
+RunMotorResult()
+StopMotorResult()
+MotorStatus()
+MotorShaftProtectionStatus()

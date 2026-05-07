@@ -95,7 +95,7 @@ def query_motor_status(self):
     Raises:
         can.CanError: If there is an error in sending the CAN message.
     """
-    state = self.specialized_state(MksCommands.QUERY_MOTOR_STATUS_COMMAND, MotorStatus(), motor_status_error)
+    state = self.specialized_state(MksCommands.QUERY_MOTOR_STATUS_COMMAND, MotorStatus, motor_status_error)
     if state == MotorStatus.Fail:
         raise motor_status_error("query_motor_status(): Fail")
     return state
@@ -144,7 +144,7 @@ def run_motor_in_speed_mode(self, direction: Direction, speed, acceleration):
 
 
 def stop_motor_in_speed_mode(self, acceleration):
-    state = self.specialized_state(MksCommands.RUN_MOTOR_SPEED_MODE_COMMAND, StopMotorResult(), motor_status_error, [0, 0, acceleration])
+    state = self.specialized_state(MksCommands.RUN_MOTOR_SPEED_MODE_COMMAND, StopMotorResult, motor_status_error, [0, 0, acceleration])
     if state == StopMotorResult.StopFail:
         raise motor_status_error("stop_motor_in_speed_mode(): Fail")
     return state
@@ -244,7 +244,7 @@ def run_motor_relative_motion_by_pulses(self, direction: Direction, speed, accel
 
 
 def stop_motor_relative_motion_by_pulses(self, acceleration):
-    state = self.specialized_state(MksCommands.RUN_MOTOR_RELATIVE_MOTION_BY_PULSES_COMMAND, StopMotorResult(), motor_status_error, [0, 0, acceleration, 0, 0, 0])
+    state = self.specialized_state(MksCommands.RUN_MOTOR_RELATIVE_MOTION_BY_PULSES_COMMAND, StopMotorResult, motor_status_error, [0, 0, acceleration, 0, 0, 0])
     if state == StopMotorResult.StopFail:
         raise motor_status_error("stop_motor_relative_motion_by_pulses(): Fail")
     return state
@@ -296,7 +296,7 @@ def run_motor_absolute_motion_by_pulses(self, speed, acceleration, absolute_puls
 
 
 def stop_motor_absolute_motion_by_pulses(self, acceleration):
-    state = self.specialized_state(MksCommands.RUN_MOTOR_ABSOLUTE_MOTION_BY_PULSES_COMMAND, StopMotorResult(), motor_status_error, [0, 0, acceleration, 0, 0, 0])
+    state = self.specialized_state(MksCommands.RUN_MOTOR_ABSOLUTE_MOTION_BY_PULSES_COMMAND, StopMotorResult, motor_status_error, [0, 0, acceleration, 0, 0, 0])
     if state == StopMotorResult.StopFail:
         raise motor_status_error("stop_motor_absolute_motion_by_pulses(): Fail")
     return state
@@ -353,7 +353,7 @@ def run_motor_relative_motion_by_axis(self, speed, acceleration, relative_axis):
 
 
 def stop_motor_relative_motion_by_axis(self, acceleration):
-    state = self.specialized_state(MksCommands.RUN_MOTOR_RELATIVE_MOTION_BY_AXIS_COMMAND, StopMotorResult(), motor_status_error, [0, 0, acceleration, 0, 0, 0])
+    state = self.specialized_state(MksCommands.RUN_MOTOR_RELATIVE_MOTION_BY_AXIS_COMMAND, StopMotorResult, motor_status_error, [0, 0, acceleration, 0, 0, 0])
     if state == StopMotorResult.StopFail:
         raise motor_status_error("stop_motor_relative_motion_by_axis(): Fail")
     return state
@@ -409,7 +409,7 @@ def run_motor_absolute_motion_by_axis(self, speed, acceleration, absolute_axis):
 
 
 def stop_motor_absolute_motion_by_axis(self, acceleration):
-    state = self.specialized_state(MksCommands.RUN_MOTOR_ABSOLUTE_MOTION_BY_AXIS_COMMAND, StopMotorResult(), motor_status_error, [0, 0, acceleration, 0, 0, 0])
+    state = self.specialized_state(MksCommands.RUN_MOTOR_ABSOLUTE_MOTION_BY_AXIS_COMMAND, StopMotorResult, motor_status_error, [0, 0, acceleration, 0, 0, 0])
     if state == StopMotorResult.StopFail:
         raise motor_status_error("stop_motor_absolute_motion_by_axis(): Fail")
     return state
