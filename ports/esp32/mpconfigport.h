@@ -130,7 +130,7 @@
 #define MICROPY_PY_MACHINE_ADC_BLOCK_INCLUDEFILE "ports/esp32/machine_adc_block.c"
 #define MICROPY_PY_MACHINE_PIN_MAKE_NEW     mp_pin_make_new
 #define MICROPY_PY_MACHINE_BITSTREAM        (1)
-#define MICROPY_PY_MACHINE_DHT_READINTO     (1)
+#define MICROPY_PY_MACHINE_DHT_READINTO     (0)
 #define MICROPY_PY_MACHINE_PULSE            (0)
 #define MICROPY_PY_MACHINE_PWM              (0)
 #define MICROPY_PY_MACHINE_PWM_DUTY         (1)
