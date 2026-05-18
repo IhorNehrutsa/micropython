@@ -413,7 +413,7 @@ class MksServo:
         status_int = int.from_bytes(tmp[1:2], byteorder="big")
 
         if not status_int:
-            raise InvalidResponseError(f"SuccessStatus(Fail)=0 with operation code of the command 0x{op_code:X}")
+            raise InvalidResponseError(f"SuccessStatus(Fail)=0 with operation code of the command 0x{op_code} {status_int}")
 
         try:
             return SuccessStatus(status_int)

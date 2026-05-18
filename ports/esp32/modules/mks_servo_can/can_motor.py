@@ -172,7 +172,7 @@ def is_motor_running(self):
     Returns:
         boolean: The running state of the motor.
     """
-    return self.query_motor_status() > MotorStatus.MotorStop
+    return self.query_motor_status() > MotorStatus.MotorStop.value
 
 
 def wait_for_motor_idle(self, timeout=15):

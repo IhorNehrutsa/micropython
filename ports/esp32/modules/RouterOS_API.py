@@ -1,431 +1,309 @@
-#!/usr/bin/python3
-# -*- coding: latin-1 -*-
+import uasyncio as asyncio
+import binascii
+import hashlib
+from sys import print_exception
 from gc import collect
 
-collect()
-from socket import socket, getaddrinfo, AF_INET, SOCK_STREAM, SOL_SOCKET, SO_REUSEADDR
-
-collect()
-import sys, binascii, hashlib
-from time import time
-
-collect()
-
-from skt import close_socket
-
-collect()
-
-if sys.implementation.name == "micropython":
-    is_micropython = True
-    from uerrno import EAGAIN, ETIMEDOUT, ECONNRESET, EINPROGRESS
-    collect()
-else:
-    is_micropython = False
-    from errno import EAGAIN, ETIMEDOUT, ECONNRESET, EINPROGRESS
-    collect()
-
-from re import compile
-
-collect()
-
+# Спроба імпорту ssl для захищених з'єднань
+try:
+    import ussl as ssl
+except ImportError:
+    import ssl
 
 class ApiRos:
-    "RouterOS API"
-    INIT = 0  # after init
-    READY = 1
-    SEND = 2
-    RECV = 3
-    HANDLE = 4
-    OK = 5
-    LOST = 6  # lost connection in wireless bridge
-    ERROR = 7  # and upper
-
-    def __init__(self, skt, timeout=None):
-        self.name = 'ROS'
-        self.skt = skt
-        self.ee = None
-        self.state = self.INIT
-        self.command = None
-        self.radio_name = None
-        self.params = None
-        self.value = None
-
+    "RouterOS API - Asynchronous version for MicroPython"
+    
+    def __init__(self, reader, writer, timeout=5):
+        self.reader = reader
+        self.writer = writer
         self.timeout = timeout
-
-        self.last_closed_ms = None
-
-        self.communication_state = 0
-
-        self.out_buf = bytearray(1024)
-        self.out_buf_mv = memoryview(self.out_buf)
-
-        #self.in_buf = bytearray(1024 * 5)
-        #self.in_buf_mv = memoryview(self.in_buf)
-
-        self.empty_bufs()
-        self.t = 0
-
-    def empty_out_buf(self):
-        self.out_index_load = 0  # position to load to self.out_buf
-        self.out_index_send = 0  # position to send from self.out_buf by self.skt.send()
-
-    def empty_in_buf(self):
-        self.in_buf = b""
-        self.in_index_get = 0  ## position to get from self.in_buf
-        #self.in_index_load = 0  # position to load to self.in_buf by self.skt.recv()
-
-    def empty_bufs(self):
-        self.empty_in_buf()
-        self.empty_out_buf()
-
-    def settimeout(self, timeout):
-        try:
-            self.skt.settimeout(timeout)
-            self.timeout = timeout
-        except:
-            pass
-
-    def close_socket(self):
-        try:
-            close_socket(self.skt)
-        except:
-            pass
-        self.skt = None
+        self.state = 1 # READY
         self.value = None
-        self.empty_bufs()
-
-    def login(self, username, pwd):
-        if self.skt is None:
-            return False
+        
+    async def close(self):
         try:
-            self.skt.settimeout(5)
-            for repl, attrs in self.talk(["/login", "=name=" + username, "=password=" + pwd]):
-                #print(f'repl>{repl}<, attrs>{attrs}<, username>{username}<')
+            self.writer.close()
+            await self.writer.wait_closed()
+        except:
+            pass
+        finally:
+            self.state = 6 # LOST
+
+    async def login(self, username, pwd):
+        try:
+            # Перший крок логіну для отримання челенджу
+            replies = await self.talk(["/login", "=name=" + username, "=password=" + pwd])
+            
+            for repl, attrs in replies:
                 if repl == "!trap":
                     return False
-                elif "=ret" in attrs.keys():
-                    chal = binascii.unhexlify((attrs["=ret"]).encode())
+                elif "=ret" in attrs:
+                    # Хешування челенджу (старий метод API)
+                    chal = binascii.unhexlify(attrs["=ret"].encode())
                     md = hashlib.md5()
                     md.update(b"\x00")
                     md.update(pwd.encode())
                     md.update(chal)
-                    for repl2, attrs2 in self.talk(["/login", "=name=" + username, "=response=00" + binascii.hexlify(md.digest()).decode()]):
-                        #print(f'repl2>{repl}<, attrs2>{attrs2}<')
+                    
+                    response = "00" + binascii.hexlify(md.digest()).decode()
+                    replies2 = await self.talk([
+                        "/login", 
+                        "=name=" + username, 
+                        "=response=" + response
+                    ])
+                    
+                    for repl2, attrs2 in replies2:
                         if repl2 == "!trap":
                             return False
-            print("RouterOS logged:", username)
-            self.state = self.READY
-            self.skt.settimeout(0)
+            
+            print("RouterOS logged in:", username)
             return True
         except Exception as e:
-            print(f'login():>{e}<, e.args[0]>{e.args[0]}< username>{username}<')
-            if e.args[0] not in (EAGAIN, ETIMEDOUT, 10035):
-                self.ee = e
-                self.state = self.ERROR + 1
-                self.close_socket()
-                return False
-            self.skt.settimeout(0)
+            print("Login error:", e)
+            return False
 
-    def talk(self, words):
-        r = []
-        if len(words) == 0:
-            return r
-        #print(words)
-        self.writeSentence(words)
+    async def talk(self, words):
+        if not words:
+            return []
+        
+        await self.write_sentence(words)
+        
+        responses = []
         while True:
-            response = self.readSentence()
-            #print(response)
-            if len(response) == 0:
+            sentence = await self.read_sentence()
+            if not sentence:
                 continue
-            reply = response[0]
+                
+            reply = sentence[0]
             attrs = {}
-            for w in response[1:]:
+            for w in sentence[1:]:
                 j = w.find("=", 1)
                 if j == -1:
                     attrs[w] = ""
                 else:
                     attrs[w[:j]] = w[j + 1:]
-            r.append((reply, attrs))
+            
+            responses.append((reply, attrs))
             if reply == "!done":
-                return r
+                return responses
 
-    def writeSentence(self, words):  # words is List or Tuple
+    async def write_sentence(self, words):
         for w in words:
-            self.writeWord(w)
-        self.writeWord("")
+            await self.write_word(w)
+        await self.write_word("") # End of sentence
+        await self.writer.drain()
 
-    def writeString(self, str_):
-        self.writeWord(str_)
-        self.writeWord("")
+    async def write_word(self, word):
+        b_word = word.encode('utf-8')
+        await self.write_len(len(b_word))
+        self.writer.write(b_word)
 
-    def writeWord(self, str_):
-        self.writeLen(len(str_))
-        self.writeStr(str_)
-
-    def writeLen(self, l):
-        if l < 0x80:
-            self.writeByte(l.to_bytes(1, sys.byteorder))
-        elif l < 0x4000:
-            l |= 0x8000
-            self.writeByte(((l >> 8) & 0xFF).to_bytes(1, sys.byteorder))
-            self.writeByte((l & 0xFF).to_bytes(1, sys.byteorder))
-        elif l < 0x200000:
-            l |= 0xC00000
-            self.writeByte(((l >> 16) & 0xFF).to_bytes(1, sys.byteorder))
-            self.writeByte(((l >> 8) & 0xFF).to_bytes(1, sys.byteorder))
-            self.writeByte((l & 0xFF).to_bytes(1, sys.byteorder))
-        elif l < 0x10000000:
-            l |= 0xE0000000
-            self.writeByte(((l >> 24) & 0xFF).to_bytes(1, sys.byteorder))
-            self.writeByte(((l >> 16) & 0xFF).to_bytes(1, sys.byteorder))
-            self.writeByte(((l >> 8) & 0xFF).to_bytes(1, sys.byteorder))
-            self.writeByte((l & 0xFF).to_bytes(1, sys.byteorder))
+    async def write_len(self, length):
+        if length < 0x80:
+            self.writer.write(length.to_bytes(1, 'big'))
+        elif length < 0x4000:
+            length |= 0x8000
+            self.writer.write(length.to_bytes(2, 'big'))
+        elif length < 0x200000:
+            length |= 0xC00000
+            self.writer.write(length.to_bytes(3, 'big'))
+        elif length < 0x10000000:
+            length |= 0xE0000000
+            self.writer.write(length.to_bytes(4, 'big'))
         else:
-            self.writeByte((0xF0).to_bytes(1, sys.byteorder))
-            self.writeByte(((l >> 24) & 0xFF).to_bytes(1, sys.byteorder))
-            self.writeByte(((l >> 16) & 0xFF).to_bytes(1, sys.byteorder))
-            self.writeByte(((l >> 8) & 0xFF).to_bytes(1, sys.byteorder))
-            self.writeByte((l & 0xFF).to_bytes(1, sys.byteorder))
+            self.writer.write(b'\xf0')
+            self.writer.write(length.to_bytes(4, 'big'))
+            
+    async def reader_readexactly(self, length):
+        return await asyncio.wait_for(self.reader.readexactly(length), timeout=self.timeout)            
 
-    def writeByte(self, bytes_):
-        #if self.timeout == 0:
-        if 0:
-            new_index = self.out_index_load + len(bytes_)
-            self.out_buf_mv[self.out_index_load:new_index] = bytes_
-            self.out_index_load = new_index
-        else:
-            n = 0
-            len_ = len(bytes_)
-            mv = memoryview(bytes_)
-            while n < len_:
-                sent = self.skt.send(mv[n:])
-                if sent <= 0:
-                    raise RuntimeError(ECONNRESET)
-                n += sent
+    async def read_sentence(self):
+        sentence = []
+        while True:
+            length = await self.read_len()
+            if length == 0:
+                return sentence
+            
+            data = await self.reader_readexactly(length)
+            sentence.append(data.decode('utf-8', 'replace'))
 
-    def writeStr(self, str_):
-        self.writeByte(bytes(str_, "UTF-8"))
-
-    def readByte(self):
-        #if self.timeout == 0:
-        if 0:
-            #self.in_buf_mv = memoryview(self.in_buf)
-            #received = self.in_buf_mv[self.in_index_get:self.in_index_get + 1]
-            received = self.in_buf[self.in_index_get:self.in_index_get + 1]
-            self.in_index_get += 1
-        else:
-            received = self.skt.recv(1)
-            if received == b'':
-                raise RuntimeError(ECONNRESET)
-        #print('readByte() received', received,  int.from_bytes(received, byteorder='big'))
-        return int.from_bytes(received, byteorder='big')
-
-    def readStr(self, length):
-        ret = b""
-        while length > 0:
-            #if self.timeout == 0:
-            if 0:
-                #self.in_buf_mv = memoryview(self.in_buf)
-                #received = self.in_buf_mv[self.in_index_get:self.in_index_get + length]
-                received = self.in_buf[self.in_index_get:self.in_index_get + length]
-                self.in_index_get += length
-            else:
-                received = self.skt.recv(length)
-                if received == b'':
-                    raise RuntimeError(ECONNRESET)
-            #print('readStr() received', received)
-            length -= len(received)
-            ret += received
-        return ret.decode("UTF-8", "replace")
-
-    def readLen(self) -> int:
-        c = self.readByte()
+    async def read_len(self):
+        # Читаємо перший байт довжини
+        c = (await self.reader_readexactly(1))[0]
+        
         if (c & 0x80) == 0x00:
             return c
         elif (c & 0xC0) == 0x80:
-            return ((c & ~0xC0) << 8) + self.readByte()
+            c &= ~0xC0
+            return (c << 8) + (await self.reader_readexactly(1))[0]
         elif (c & 0xE0) == 0xC0:
             c &= ~0xE0
-            c <<= 8
-            c += self.readByte()
-            c <<= 8
-            c += self.readByte()
+            data = await self.reader_readexactly(2)
+            return (c << 16) + (data[0] << 8) + data[1]
         elif (c & 0xF0) == 0xE0:
             c &= ~0xF0
-            c <<= 8
-            c += self.readByte()
-            c <<= 8
-            c += self.readByte()
-            c <<= 8
-            c += self.readByte()
+            data = await self.reader_readexactly(3)
+            return (c << 24) + (data[0] << 16) + (data[1] << 8) + data[2]
         elif (c & 0xF8) == 0xF0:
-            c = self.readByte()
-            c <<= 8
-            c += self.readByte()
-            c <<= 8
-            c += self.readByte()
-            c <<= 8
-            c += self.readByte()
-        return c
+            data = await self.reader_readexactly(4)
+            return (data[0] << 24) + (data[1] << 16) + (data[2] << 8) + data[3]
+        return 0
 
-    def readWord(self):
-        return self.readStr(self.readLen())
-
-    def readSentence(self):
-        r = []
+    async def _read_sentence_as_bytes(self):
+        """Допоміжний метод для читання сирих байтів одного речення"""
+        sentence = b""
         while True:
-            w = self.readStr(self.readLen())
-            if w == "":
-                return r
-            r.append(w)
+            length = await self.read_len()
+            if length == 0:
+                return sentence + b"\x00" # Додаємо термінатор для зручності пошуку
+            
+            word = await self.reader_readexactly(length)
+            sentence += word + b"\x00"
+        return sentence
 
-    def readResponse(self):
-        res_list = []
-        while True:
-            response = self.readSentence()
-            if response[0] == '!done':
-                #print("    Command complete: done")
-                break
-            else:
-                res_list.append(response)
-                #print("    ", end='')
-                #print(response)
-        return res_list
-
-    def receive(self):
+    async def execute_and_get_params(self, command, radio_name, params):
+        """
+        Відправляє команду та чекає на специфічні параметри, 
+        використовуючи пряме очікування відповіді.
+        """
+        collect()
+        self.command = command
+        self.radio_name = radio_name
+        self.params = params
+    
         try:
-            received = self.skt.recv(1024)  #1024*10)#128)#
-            if received == b'':
-                print(self.name, "Error: received == b''")
-                self.close_socket()
-                return False
-            self.in_buf += received
+            # 1. Відправка команди
+            await self.write_sentence([self.command])
+            
+            # 2. Пряме читання відповідей до моменту !done
+            full_data = b""
+            while True:
+                # Читаємо одне речення (sentence) з API
+                sentence_bytes = await self._read_sentence_as_bytes()
+                
+                # Якщо це кінець транзакції
+                if b"!done" in sentence_bytes:
+                    break
+                
+                # Накопичуємо дані для пошуку (тільки якщо це репліка з даними)
+                if b"!re" in sentence_bytes or b"!trap" in sentence_bytes:
+                    full_data += sentence_bytes
+            
+            return self._parse_parameters(full_data)
+
         except Exception as e:
-            if e.args[0] in (EAGAIN, ETIMEDOUT, 10035):
-                return False
-            else:
-                print(f'receive() e>{e}<, e.args[0]>{e.args[0]}<')
-                self.ee = e
-                print(self.name, "Error: receive:", e)
-                self.close_socket()
-                return False
-        return True
+            print(f"Error during command execution: {e}")
+            await self.close()
+            return None
 
-    def send(self):
-        if self.skt is not None:
-            if self.out_index_send < self.out_index_load:
-                try:
-                    sent = self.skt.send(self.out_buf_mv[self.out_index_send:self.out_index_load])
-                    if sent <= 0:
-                        print(self.name, "Error: sent<=0:", sent)
-                        self.close_socket()
-                        return False
-                    self.out_index_send += sent
-                    if self.out_index_send >= self.out_index_load:
-                        self.empty_out_buf()
-                        self.state = self.RECV
-                    return True
-                except Exception as e:
-                    if e.args[0] in (EAGAIN, ETIMEDOUT, 10035):
-                        return True
-                    print(f'send() e>{e}<, e.args[0]>{e.args[0]}<')
-                    self.ee = e
-                    print(self.name, "Error: send:", e.args[0], e)
-                    self.close_socket()
-                    return False
-            else:
-                return True
-        return False
+    def _parse_parameters(self, data):
+        if not data:
+            return {}
+    
+        #print('full_data:', data)
+        
+        radio_name_b = self.radio_name.encode() if isinstance(self.radio_name, str) else self.radio_name
+        index_radio = data.find(b'=' + radio_name_b + b'\x00')
 
-    def handle_command(self):
-#         print('state, value, skt, out_index_load, out_index_send, in_index_get', self.state, self.value, self.skt, self.out_index_load, self.out_index_send, self.in_index_get)
-#         print('type(ee)', type(self.ee))
-#         print('ee', self.ee)
-        if (self.state in (self.READY, self.OK, self.LOST)) or (time() - self.t  > 1):
-            self.t = time()
-            try:
-                self.writeString(self.command)
-                #print(self.state, self.radio_name, self.command)
-                self.state = self.SEND
-            except Exception as e:
-                if e.args[0] not in (EAGAIN, ETIMEDOUT, 10035):
-                    print(f'handle_command() e>{e}<, e.args[0]>{e.args[0]}<')
-                    self.ee = e
-                    sys.print_exception(e)
-                    self.state = self.ERROR + 2
-                    self.close_socket()
-                    return
+        if index_radio == -1:
+            return {}
+    
+        results = {}
+        # Створюємо memoryview один раз для ефективного витягування значень
+        mv = memoryview(data)
+        data_len = len(data)
 
-        if not self.send():
-            return
+        for param in self.params:
+            param_b = param.encode() if isinstance(param, str) else param
+            search_key = b'=' + param_b + b'='
 
-        if self.out_index_load == 0:
-            #if self.state == self.RECV:
-            if not self.receive():
-                return
-
-            if len(self.in_buf) == 0:
-                return
-
-            #self_in_buf = bytes(self.in_buf_mv[0:self.in_index_load])
-            if (self.in_buf == b"\x05!done\x00"):
-                #print('self.LOST')
-                self.empty_in_buf()
-                self.state = self.LOST
-                self.value = {}
-                return
-
-            self.value = {}
-            #self.in_buf_mv = memoryview(self.in_buf)
-            #print("---in_buf---\n", self.in_buf, "\n---in_buf---")
-            done_pos = self.in_buf.find(b"\x05!done\x00")
-            #if (self.in_buf[0:4] != b"\x03!re") or (done_pos < 0):
-            if (done_pos < 0):
-                #print("---in_buf---", self.in_buf, "---in_buf---")
-                self.state = self.ERROR + 3
-                return
-
-            index_radio_name = self.in_buf.find(self.radio_name)
-            n = 0
-            if index_radio_name > 0:
-                new_value = {}
-                for param in self.params:
-                    index_param = self.in_buf.find(param, index_radio_name)
-                    if index_param > 0:
+            # Шукаємо в об'єкті bytes (data)
+            start_idx = data.find(search_key, index_radio)
+            
+            if start_idx != -1:
+                val_start = start_idx + len(search_key)
+                # Шукаємо кінець значення (нульовий байт)
+                val_end = data.find(b'\x00', val_start)
+                
+                if val_end != -1:
+                    try:
+                        # Спроба 1: Пряме перетворення в int (якщо там чисте число)
+                        # Спроба прямого перетворення (найшвидша)
+                        results[param] = int(mv[val_start:val_end])
+                    except (ValueError, SyntaxError) as e:
+                        # print_exception(e)
                         try:
-                            regex = compile(param + b"[-=A-Za-z0-9]*")
-                            element = regex.search(self.in_buf[index_param:]).group(0)
-                            val_str = element[len(param):]
-                            regex = compile(b"-?[1-9]\d*")
-                            val_str = regex.search(val_str).group(0)
-                            try:
-                                val = int(val_str)
-                            except:
-                                val = 0
-                                print('element', element)
-                                print('val_str', val_str)
-                            new_value.setdefault(param, val)
-                            n += 1
+                            # Спроба 2: Через float (ігнорує пробіли та специфічні закінчення)
+                            # Отримуємо значення. float() у MicroPython досить швидкий 
+                            # і сам ігнорує зайві нечислові символи в кінці рядка,
+                            # тому замість циклу просто перетворюємо зріз.
+                            # Якщо в значенні можуть бути одиниці виміру (наприклад "120Mbps"),
+                            # float() викличе помилку
+                            results[param] = int(float(mv[val_start:val_end]))
+                        except (ValueError, SyntaxError) as e:
+                            # print_exception(e)
+                            # Спроба 3: Ручна чистка від одиниць виміру (dBm, Mbps тощо)
+                            # Якщо не просто число (наприклад, "-65dBm" або "54Mbps")
+                            # Витягуємо тільки число (обробка від'ємних значень та цифр)
+                            num_bytes = 0
+                            # Безпечний цикл пошуку числової частини
+                            while val_start + num_bytes < data_len:
+                                char_code = mv[val_start + num_bytes]
+                                # Дозволяємо: цифри, точку, мінус
+                                # ASCII: 45='-', 46='.', 48-57='0-9' (виключаємо 47='/')
+                                if 45 <= char_code <= 57 and char_code != 47:
+                                    num_bytes += 1
+                                else:
+                                    break
+                            #print('num_bytes:', num_bytes, data[val_start:val_start + num_bytes])
+                            if num_bytes:
+                                try:
+                                    # Використовуємо float для обробки крапок, потім в int
+                                    results[param] = int(float(mv[val_start:val_start + num_bytes])) 
+                                except Exception as e:
+                                    print_exception(e)
                         except Exception as e:
-                            self.state = self.ERROR + 5
-                            self.ee = e
-                            print("regex.search Exception as e", e.args[0], e)
+                            print_exception(e)
+                    except Exception as e:
+                        print_exception(e)
+                        continue
+        
+        self.value = results
+        return results
 
-            #print('n=', n, "===in_buf===\n", self.in_buf, "\n===in_buf===")
-            if n == len(self.params):
-                self.state = self.OK
-                self.ee = None
-                self.value = new_value
-#                 print("===in_buf===\n", self.in_buf, "\n===in_buf===")
-#                 print('self.value', self.value)
-            else:
-                self.state = self.ERROR + 4
-                #self.empty_in_buf()
-            self.in_buf = self.in_buf[done_pos + 7:]
+    async def handle_command(self):
+        #print(self.command, self.radio_name, self.params)
+        await self.execute_and_get_params(self.command, self.radio_name, self.params)
+        #print('handle_command:', self.value)
+        return
 
+# --- Функція для підключення ---
+async def connect_ros(ip, port=None, username="admin", password="", secure=False):
+    if port is None:
+        port = 8729 if secure else 8728
+        
+    print(f"Connecting to RouterOS {ip}:{port}...")
+    try:
+        reader, writer = await asyncio.open_connection(ip, port)
+        
+        if secure:
+            # MicroPython SSL wrap (може вимагати багато RAM)
+            import ussl
+            # Примітка: SSL в asyncio MicroPython може бути складним 
+            # залежить від конкретної прошивки
+            print("SSL warning: ensure your firmware supports async SSL")
 
+        api = ApiRos(reader, writer)
+        if await api.login(username, password):
+            return api
+        else:
+            await api.close()
+            return None
+    except Exception as e:
+        print("Connection failed:", e)
+        return None
 
-open_socket_time = 0 
+open_socket_time = 0
 
 def open_socket(ip, port=0, secure=False, timeout=None, prn=False):  # timeout in seconds, 0==non blocked, None==blocked
     global open_socket_time

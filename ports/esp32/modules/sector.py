@@ -1,17 +1,14 @@
 # sector.py
+import uasyncio as asyncio
 from utime import time
-
 from Owl_API import value_cmp, handle_ros_command, print_motor
-
-import config_version
-
 
 rpm_high_save = 0
 rpm_low_save = 0
 
 motor_state = -1
 
-def handle_sector(owl, motor, ros_params):
+async def handle_sector(owl, motor, ros_params):
     global rpm_high_save, rpm_low_save
 
 #     global motor_state
@@ -20,9 +17,9 @@ def handle_sector(owl, motor, ros_params):
 #         motor_state = motor.state
 
     # Поиск глобального максимального уровня в секторе.
-    handle_ros_command(owl)
-    if owl.value_now is None:
-        return
+    await handle_ros_command(owl)
+#     if owl.value_now is None:
+#         return
     v = owl.value_now
     if owl.mode == owl.MD_SECTOR_A:
         a = owl.azim_angle_now
@@ -30,18 +27,18 @@ def handle_sector(owl, motor, ros_params):
         a = owl.elev_angle_now
     a = round(a, 1)
 
-    if len(v) > 0:
-        if len(motor.value_start) == 0:
+    if v:
+        if not motor.value_start:
             motor.value_start = v  # обнаружен сигнал
             motor.angle_start = a  # в этой позиции
 
     if motor.state == 0:  # очищаем исходные
         owl.sector_time = time()
-        #owl.ros_command2 = ["/interface/wireless/set", "=.id=wlan1", "=tx-chains=0,1", "=rx-chains=0,1"]
-        if len(v):
-            owl.ros_command2 = ["/system/script/run", "=.id=communication"]
-        else:
-            owl.ros_command2 = ["/system/script/run", "=.id=search"]
+#         #owl.ros_command2 = ["/interface/wireless/set", "=.id=wlan1", "=tx-chains=0,1", "=rx-chains=0,1"]
+#         if v:
+#             owl.ros_command2 = ["/system/script/run", "=.id=communication"]
+#         else:
+#             owl.ros_command2 = ["/system/script/run", "=.id=search"]
 
         owl.sector_counter = 0
         if (a >= motor.max_search):
@@ -55,7 +52,7 @@ def handle_sector(owl, motor, ros_params):
         else:
             motor.search_dir = -1
 
-        if len(v):
+        if v:
             owl.ros_best = v
             motor.angle_best = a
             motor.angle_begin = a  # сигнал есть в начале поиска (не будет перезаписан)
@@ -71,7 +68,7 @@ def handle_sector(owl, motor, ros_params):
         rpm_low_save = owl.azim.mover.rpm_low
 
         motor.state = 2
-
+        print('motor.state = 2')
     elif motor.state == 2:
         # даем задание на всю ширину
         if motor.search_dir > 0:
@@ -115,7 +112,7 @@ def handle_sector(owl, motor, ros_params):
         or (motor.search_dir > 0) and (a >= motor.max_search) \
         or (motor.search_dir < 0) and (a <= motor.min_search):
             motor.mover.stop()
-            if (motor.angle_begin is None) and len(v):
+            if (motor.angle_begin is None) and v:
                 motor.angle_begin = a
                 owl.sector_counter = 0  # впервые обнаружен сигнал(возможно корреспондент включился позже, поймали на исходе), нужно пройти полный сектор поиска
 
@@ -143,7 +140,7 @@ def handle_sector(owl, motor, ros_params):
 #     elif motor.state == 4:
 #         if owl.state == owl.CM_NO:
 #             motor.mover.stop()
-#             if len(v):
+#             if v:
 #                 motor.search_dir = -motor.search_dir
 #                 motor.state = 2  # нет сигнала, переискать
 #             else:
@@ -187,5 +184,5 @@ def handle_sector(owl, motor, ros_params):
 #                 owl.mode = owl.MD_MANUAL
                 owl.mode = owl.MD_ESCORT_A  # переключение на режим слежения
     else:
-        print('raise')
         raise
+    await asyncio.sleep_ms(100)

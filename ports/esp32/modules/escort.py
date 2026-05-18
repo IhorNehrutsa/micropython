@@ -1,5 +1,6 @@
 # escort.py
-from time import time
+import uasyncio as asyncio
+from utime import time
 from Owl_API import value_cmp, handle_ros_command, print_motor
 
 WORK_TIME = 5 * 60  # 5 min
@@ -7,16 +8,22 @@ REST_TIME = 5 * 60  # 5 min
 
 start_time = 0
 last_work_time = 0
+motor_state = -1
 
-def handle_escort(owl, motor, ros_params):
+async def handle_escort(owl, motor, ros_params):
     global start_time, last_work_time
+    
+#     global motor_state
+#     if motor_state != motor.state:
+#         print('motor_state <- motor.state', motor_state, motor.state)
+#         motor_state = motor.state
 
     # Движение ++/-- пока мгновенный уровень сигнала не ниже, чем исходный уровень(поиск локального максимального уровня).
     # При потере сигнала переход на поиск в секторе не производится, ждем +/- в этой точке.
     # Изначально сигнал может отсутствовать.
-    handle_ros_command(owl)
-    if owl.value_now is None:
-        return
+    await handle_ros_command(owl)
+#     if owl.value_now is None:
+#         return
     v = owl.value_now
     if owl.mode == owl.MD_ESCORT_A:
         a = owl.azim_angle_now
@@ -24,7 +31,7 @@ def handle_escort(owl, motor, ros_params):
         a = owl.elev_angle_now
     a = round(a, 1)
 
-    if len(v) > 0:
+    if v:
         if len(motor.value_start) == 0:
             motor.value_start = v  # обнаружен сигнал
             motor.angle_start = a  # в этой позиции
@@ -32,7 +39,7 @@ def handle_escort(owl, motor, ros_params):
     if motor.state == 0:  # очищаем исходные
         if owl.mode == owl.MD_ESCORT_A:
             owl.ros_command2 = ["/system/script/run", "=.id=communication"]
-        if len(v):
+        if v:
             motor.angle_best = a
             owl.ros_best = v
 
@@ -100,6 +107,6 @@ def handle_escort(owl, motor, ros_params):
                 owl.mode = owl.MD_ESCORT_E
             else:
                 owl.mode = owl.MD_ESCORT_A
-
     else:
         raise
+    await asyncio.sleep_ms(100)

@@ -87,9 +87,11 @@
 #define MICROPY_GC_SPLIT_HEAP_AUTO          (1)
 
 // extended modules
+#define MICROPY_PY_ESPNOW                   (0)
 #ifndef MICROPY_PY_ESPNOW
 #define MICROPY_PY_ESPNOW                   (1)
 #endif
+#define MICROPY_PY_BLUETOOTH                (0)
 #ifndef MICROPY_PY_BLUETOOTH
 #define MICROPY_PY_BLUETOOTH                (1)
 #endif
@@ -155,6 +157,7 @@
 #ifndef MICROPY_PY_MACHINE_DAC
 #define MICROPY_PY_MACHINE_DAC              (SOC_DAC_SUPPORTED)
 #endif
+#define MICROPY_PY_MACHINE_I2S              (0)
 #ifndef MICROPY_PY_MACHINE_I2S
 #define MICROPY_PY_MACHINE_I2S              (SOC_I2S_SUPPORTED)
 #endif
@@ -208,7 +211,7 @@
 #define MICROPY_SSL_MBEDTLS                 (MICROPY_PY_SSL)
 #define MICROPY_PY_WEBSOCKET                (MICROPY_PY_NETWORK)
 #define MICROPY_PY_WEBREPL                  (MICROPY_PY_NETWORK)
-#define MICROPY_PY_ONEWIRE                  (1)
+#define MICROPY_PY_ONEWIRE                  (0)
 #define MICROPY_PY_SOCKET_EVENTS            (MICROPY_PY_WEBREPL)
 #define MICROPY_PY_BLUETOOTH_RANDOM_ADDR    (1)
 #ifndef MICROPY_PY_ESP32_PCNT

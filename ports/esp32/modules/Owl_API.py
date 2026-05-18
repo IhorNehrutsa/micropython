@@ -1,4 +1,4 @@
-USE_ROUTEROS_API = 1
+USE_ROUTEROS_API = 0
 ROS_TIMEOUT = 1  # 0.1  # time in seconds
 #OWL_TIMEOUT = 1
 
@@ -6,8 +6,8 @@ ROS_TIMEOUT = 1  # 0.1  # time in seconds
 #ros_command = ["/interface/wireless/align/monitor/wlan1"]  #
 ros_command = "/interface/wireless/registration-table/print"
 
-ros_params = (b"=signal-strength=", b"=signal-to-noise=")
-#ros_params = (b"=signal-strength-ch0=", b"=signal-to-noise=")
+ros_params = ("signal-strength", "signal-to-noise")
+#ros_params = ("signal-strength-ch0", "signal-to-noise")
 
 from gc import collect
 
@@ -15,7 +15,7 @@ from utime import ticks_ms, ticks_diff
 from machine import unique_id
 
 #import config_version
-from RouterOS_API import open_socket, ApiRos
+from RouterOS_API import connect_ros
 
 from avg_filter import *
 
@@ -50,6 +50,8 @@ def value_sub(value1, value2, ros_params):
 
 
 def value_cmp(value1, value2, ros_params):
+    if (value1 is None) or (value2 is None):
+        return 0
     if (len(value1) > 0) and (len(value2) == 0):
         return 1
     if (len(value1) == 0) and (len(value2) > 0):
@@ -68,9 +70,11 @@ __t_ROS = ticks_ms()
 _t_ROS = ticks_ms()
 
 
-def handle_ros_command(owl):
+async def handle_ros_command(owl):
     global _t_ROS, __t_ROS
-
+    
+    collect()
+    
     t_ROS = ticks_ms()
 
     owl_value_now = owl.value_now
@@ -81,12 +85,10 @@ def handle_ros_command(owl):
     owl.value_now = None
 
     if owl.ros_api != None:
-        if owl.ros_api.skt == None:
-            owl.ros_api = None
-            return
-        owl.ros_api.handle_command()  # 2
+        await owl.ros_api.handle_command()  # 2
         owl.value_now = owl.ros_api.value  # 3
 
+    #print(owl.azim.mover.info())
     azim_angle_now = owl.azim.mover.angle_now  # 4
     elev_angle_now = owl.elev.mover.angle_now  # 4
 
@@ -179,7 +181,7 @@ class Owl(object):
 
     LOSTS = 5
 
-    ANTENNA_ANGLE = 1  # 5  # antenna beamwidth angle # угол луча антенны
+    ANTENNA_ANGLE = 2  # 5  # antenna beamwidth angle # угол луча антенны
 
     # motion modes
     MD_OFF = 0  # motion off
@@ -258,7 +260,6 @@ class Owl(object):
         self.elev = elev
 
         self.s1 = ''
-        self.autorefresh = False
 
         self.ticks_ms = ticks_ms()
 
@@ -446,57 +447,52 @@ class Owl(object):
 
     def deinit_ros_api(self):
         if self.ros_api is not None:
-            self.ros_api.close_socket()
+            self.ros_api.close()
             self.ros_api = None
 
-    def init_ros_api(self, user="admin", passw="", ip="", port=8728, secure=False):
+    async def init_ros_api(self, user="admin", passw="", ip="", port=8728, secure=False):
         if not USE_ROUTEROS_API:
             return None
 
-        print(f"Try to open ROS socket {ip}:{port}")
-        skt = open_socket(ip, port=port, secure=secure, timeout=ROS_TIMEOUT)
-        if skt is None:
-            print(f"Could not open ROS socket {ip}:{port}")
+        ros_api = await connect_ros(ip, username=user, password=passw)
+
+        if ros_api is None:
+            print(f"Failed to connect to RouterOS at {ip}")
             return None
-
-        ros_api = ApiRos(skt, timeout=ROS_TIMEOUT)
-
-        if not ros_api.login(user, passw):
-            print(f"Could not ROS login '{user}' to {ip}:{port}")
-            return None
-
-        ros_api.settimeout(0)  # time in seconds
+    
         ros_api.command = ros_command
-        ros_api.radio_name = b"=radio-name=" + self.RADIO_NAME
+        #ros_api.radio_name = b"=radio-name=" + self.RADIO_NAME
+        ros_api.radio_name = self.RADIO_NAME
         ros_api.params = ros_params
         self.ros_api = ros_api
         return ros_api
 
-    def deinit_ros_api2(self):
-        if self.ros_api2 is not None:
-            self.ros_api2.close_socket()
-            self.ros_api2 = None
-
-    def init_ros_api2(self, user="admin", passw="", ip="", port=0, secure=False):
-        if not USE_ROUTEROS_API:
-            return None
-
-        print(f"Try to open ROS2 socket {ip}:{port}")
-        skt = open_socket(ip, port=port, secure=secure, timeout=ROS_TIMEOUT)
-        if skt is None:
-            print(f"Could not open ROS2 socket {ip}:{port}")
-            return None
-
-        ros_api = ApiRos(skt, timeout=ROS_TIMEOUT)
-
-        if not ros_api.login(user, passw):
-            print(f"Could not ROS2 login '{user}' to {ip}:{port}")
-            return None
-        '''
-        ros_api.settimeout(0)  #ROS_TIMEOUT)  #  1)#0.1)  # time in seconds
-        ros_api.command = ros_command
-        ros_api.radio_name = b"=radio-name=" + self.RADIO_NAME
-        ros_api.params = ros_params
-        '''
-        self.ros_api2 = ros_api
-        return ros_api
+#     def deinit_ros_api2(self):
+#         if self.ros_api2 is not None:
+#             self.ros_api2.close_socket()
+#             self.ros_api2 = None
+# 
+#     def init_ros_api2(self, user="admin", passw="", ip="", port=0, secure=False):
+#         if not USE_ROUTEROS_API:
+#             return None
+# 
+#         print(f"Try to open ROS2 socket {ip}:{port}")
+#         skt = open_socket(ip, port=port, secure=secure, timeout=ROS_TIMEOUT)
+#         if skt is None:
+#             print(f"Could not open ROS2 socket {ip}:{port}")
+#             return None
+# 
+#         ros_api = ApiRos(skt, timeout=ROS_TIMEOUT)
+# 
+#         if not ros_api.login(user, passw):
+#             print(f"Could not ROS2 login '{user}' to {ip}:{port}")
+#             return None
+#         '''
+#         ros_api.settimeout(0)  #ROS_TIMEOUT)  #  1)#0.1)  # time in seconds
+#         ros_api.command = ros_command
+#         ros_api.radio_name = b"=radio-name=" + self.RADIO_NAME
+#         ros_api.params = ros_params
+#         '''
+#         self.ros_api2 = ros_api
+#         return ros_api
+# 

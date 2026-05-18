@@ -1,5 +1,6 @@
 # rotator.py
 
+import uasyncio as asyncio
 from sys import print_exception
 from micropython import schedule
 from utime import ticks_ms, ticks_diff, sleep_ms
@@ -7,9 +8,7 @@ from machine import Timer
 import power
 from mks_servo_can.mks_enums import *
 
-print(MotorStatus())
-
-BREAK_ANGLE = 270
+# BREAK_ANGLE = 270
 
 
 class Rotator():
@@ -22,6 +21,7 @@ class Rotator():
         self.motor_period = motor_period
 
         self.t_handle_motors = 0  # час попереднього запуску
+        #self.t_handle_sensors = 0
 
         self.dt_handle_sensors = 0
         self.dt_handle_motors = 0
@@ -65,6 +65,8 @@ class Rotator():
     @micropython.native
     def handle_sensors(self):
         t = ticks_ms()
+        #print(ticks_diff(t, self.t_handle_sensors))
+        #self.t_handle_sensors = t
 
         self.sensors.handle()
 
@@ -72,7 +74,7 @@ class Rotator():
         if t > 0:
             self.dt_handle_sensors = t
 
-    @micropython.native
+    #@micropython.native
     def handle_motors(self):
         t = ticks_ms()
 
@@ -85,17 +87,18 @@ class Rotator():
                 if self.elev.parking_position is not None:
                     self.elev.angle_target = self.elev.parking_position
 
-            if abs(self.azim.angle_counter - self.azim.angle_now) > BREAK_ANGLE:
-                self.azim.stop_pulses()
-            else:
-                self.azim.go()
+            #print('self.azim.angle_counter, self.azim.angle_now', await self.azim.angle_counter(), self.azim.angle_now)
+#             if abs(await self.azim.angle_counter() - self.azim.angle_now) > BREAK_ANGLE:
+#                 self.azim.stop_pulses()
+#             else:
+            self.azim.go()
 
-            sleep_ms(300)
+            sleep_ms(10)
 
-            if abs(self.elev.angle_counter - self.elev.angle_now) > BREAK_ANGLE:
-                self.elev.stop_pulses()
-            else:
-                self.elev.go()
+#             if abs(self.elev.angle_counter - self.elev.angle_now) > BREAK_ANGLE:
+#                 self.elev.stop_pulses()
+#             else:
+            self.elev.go()
 
             tmp = ticks_diff(ticks_ms(), t)
             if tmp > 0:
@@ -106,11 +109,8 @@ class Rotator():
     def _timer_callback(self, timer):
         try:
             self.handle_sensors()
-            
             self.handle_motors()
-                
             sleep_ms(1)
-            
         except KeyboardInterrupt as e:
             print_exception(e)
             self.timer_deinit()
@@ -124,12 +124,19 @@ class Rotator():
             sleep_ms(1)
         except BaseException as e:
             print_exception(e)
+            self.timer_deinit()
             raise e
 
     def go(self):
         self.azim.go()
+        sleep_ms(10)
         self.elev.go()
 
+    def stop(self):
+        self.azim.stop()
+        sleep_ms(10)
+        self.elev.stop()
+        
     @property
     def ready(self):
         return self.azim.is_ready(), self.elev.is_ready()
@@ -146,11 +153,11 @@ class Rotator():
             if prn and ticks_diff(ticks_ms(), t) > 300:
                 t = ticks_ms()
                 print(f'Angles: {self.angles}', end='                                                        \r')
-                #print('r.angles', r.angles, r.elev.info(), r.elev.angle_counter, end='                                                        \r')
-                #print('r.angles', r.angles, r.azim.angle_counter, r.elev.angle_counter, end='                                                        \r')
-            sleep_ms(10)
+            # asyncio.run(asyncio.sleep_ms(100))
+            sleep_ms(100)
         if prn: print('r.angles', self.angles, '                                                        ')
-        if prn: print('!READY!')
+        if prn: print('wait(): READY!')
+        return True
 
     @property
     #@micropython.native
@@ -171,7 +178,8 @@ class Rotator():
     #@micropython.native
     def targets(self, angles):
         self.azim.angle_target, self.elev.angle_target = angles
-        self.handle_motors()
+        #self.handle_motors()
+        self.go()
 
     @property
     def rpm(self):
