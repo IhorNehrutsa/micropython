@@ -259,6 +259,7 @@ class SerialTransport(Transport):
         # check we have a prompt
         data = self.read_until(1, b">")
         if not data.endswith(b">"):
+            print(data)
             raise TransportError("could not enter raw repl")
 
         if self.use_raw_paste:

@@ -417,3 +417,6 @@ void boardctrl_startup(void);
 #ifndef MICROPY_ESP_IDF_ENTRY
 #define MICROPY_ESP_IDF_ENTRY app_main
 #endif
+
+// Uncomment the following line to change the default baud rate for the REPL. The default is 115200.
+// #define MICROPY_HW_UART_REPL_BAUD 230400 // 460800 // 921600 // 1000000 //

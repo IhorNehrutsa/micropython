@@ -103,9 +103,10 @@ def argparse_connect():
     cmd_parser.add_argument(
         "-b",
         "--baud",
+        "--baudrate",
         type=int,
         default=115200,
-        help="baudrate of the serial console",
+        help="baud rate of the serial console (default is 115200)",
     )
     cmd_parser.add_argument(
         "device", nargs=1, help="Either list, auto, id:x, port:x, or any valid device name/path"
@@ -616,6 +617,17 @@ def main():
                 "next_command", nargs=argparse.REMAINDER, help=f"Next {_PROG} command"
             )
             args = cmd_parser.parse_args(command_args)
+
+            # argparse.REMAINDER treats options after the connect device as the
+            # next command, so move a trailing --baudrate option before the device.
+            if cmd == "connect" and args.next_command:
+                next_args = args.next_command
+                if next_args[0] == "--baudrate" or next_args[0] == "--baud" or next_args[0] == "-b":
+                    next_args = next_args[:2] + args.device + next_args[2:]
+                elif next_args[0].startswith("--baudrate=") or next_args[0].startswith("--baud=") or next_args[0].startswith("-b="):
+                    next_args = next_args[:1] + args.device + next_args[1:]
+                if next_args is not args.next_command:
+                    args = cmd_parser.parse_args(next_args)
 
             # Execute command.
             handler_func(state, args)

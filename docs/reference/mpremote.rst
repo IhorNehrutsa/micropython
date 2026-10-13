@@ -90,7 +90,9 @@ The full list of supported commands are:
 
   .. code-block:: bash
 
-      $ mpremote connect <device>
+      $ mpremote connect <device> [--baudrate <baudrate>]
+      $ mpremote connect <device> [--baud <baudrate>]
+      $ mpremote connect <device> [-b <baudrate>]
 
   ``<device>`` may be one of:
 
@@ -113,6 +115,17 @@ The full list of supported commands are:
   **Note:** The ``auto`` option will only detect USB serial ports, i.e. a serial
   port that has an associated USB VID/PID (i.e. CDC/ACM or FTDI-style
   devices). Other types of serial ports will not be auto-detected.
+
+    ``--baudrate`` sets the host serial connection baud rate (default is ``115200``).
+  It must match the baud rate configured for the device's REPL; it does not
+  change the device's baud rate.
+  Device baud rate can be changed by the ``machine.UART`` class or during
+  firmware compilation.
+  For example, to set the REPL baud rate to 230400 for an ESP32 device's, you need to add
+  the following line to the `mpconfigport.h` file when building the MicroPython firmware:
+  '''
+  #define MICROPY_HW_UART_REPL_BAUD 230400
+  '''
 
 .. _mpremote_command_disconnect:
 
