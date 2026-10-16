@@ -121,10 +121,16 @@ The full list of supported commands are:
   change the device's baud rate.
   Device baud rate can be changed by the ``machine.UART`` class or during
   firmware compilation.
-  For example, to set the REPL baud rate to 230400 for an ESP32 device's, you need to add
-  the following line to the `mpconfigport.h` file when building the MicroPython firmware:
+  For example, to set the REPL baud rate to 230400 for an ESP32 device's, you need to use
+  -DMICROPY_HW_UART_REPL_BAUD=230400 key with make command
+  or add the following line to the `mpconfigport.h` file when building the MicroPython firmware
   '''
   #define MICROPY_HW_UART_REPL_BAUD 230400
+  '''
+  or add the lines below to the beginning of the `boot.py` file
+  '''
+  from machine import UART
+  UART(0, baudrate=230400)
   '''
 
 .. _mpremote_command_disconnect:
